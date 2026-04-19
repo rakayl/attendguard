@@ -1,0 +1,268 @@
+{
+  "info": {
+    "name": "AttendGuard API v3",
+    "description": "Fraud-Proof Attendance System — Full API with RBAC + Geofence",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); if(r.token) pm.collectionVariables.set('token',r.token);"] } }],
+          "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\"email\":\"admin@company.com\",\"password\":\"admin123\"}" }
+          }
+        },
+        {
+          "name": "Login (Employee)",
+          "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\"email\":\"employee@company.com\",\"password\":\"admin123\"}" }
+          }
+        },
+        {
+          "name": "Register",
+          "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"name\":\"Jane Test\",\"email\":\"jane@company.com\",\"password\":\"password123\"}" }
+          }
+        },
+        {
+          "name": "Me (current user + permissions)",
+          "request": { "method": "GET",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Check In — SAFE (inside zone)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": -6.2000,\n  \"long\": 106.8167,\n  \"accuracy\": 12.5,\n  \"is_mock\": false,\n  \"device_time\": \"2024-06-01T08:00:00Z\",\n  \"device_id\": \"dev_test_001\"\n}" }
+          }
+        },
+        {
+          "name": "Check In — BLOCKED (Fake GPS)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": -6.2000,\n  \"long\": 106.8167,\n  \"accuracy\": 5.0,\n  \"is_mock\": true,\n  \"device_time\": \"2024-06-01T08:00:00Z\",\n  \"device_id\": \"dev_test_001\"\n}" }
+          }
+        },
+        {
+          "name": "Check In — BLOCKED (Outside Zone)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": -6.9000,\n  \"long\": 107.6000,\n  \"accuracy\": 15.0,\n  \"is_mock\": false,\n  \"device_time\": \"2024-06-01T08:00:00Z\",\n  \"device_id\": \"dev_test_001\"\n}" }
+          }
+        },
+        {
+          "name": "Check In — SUSPICIOUS (Poor accuracy + new device)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": -6.2000,\n  \"long\": 106.8167,\n  \"accuracy\": 80.0,\n  \"is_mock\": false,\n  \"device_time\": \"2024-06-01T05:50:00Z\",\n  \"device_id\": \"unknown_device_xyz\"\n}" }
+          }
+        },
+        {
+          "name": "Check Out",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/check-out",
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": -6.2000,\n  \"long\": 106.8167,\n  \"accuracy\": 10.0,\n  \"is_mock\": false,\n  \"device_time\": \"2024-06-01T17:00:00Z\",\n  \"device_id\": \"dev_test_001\"\n}" }
+          }
+        },
+        {
+          "name": "History",
+          "request": { "method": "GET",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/history"
+          }
+        },
+        {
+          "name": "Fraud Detail",
+          "request": { "method": "GET",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/attendance/1/fraud"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Geofence",
+      "item": [
+        {
+          "name": "List Active Zones",
+          "request": { "method": "GET",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/active"
+          }
+        },
+        {
+          "name": "Check Point (inside)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/check",
+            "body": { "mode": "raw", "raw": "{\"lat\":-6.2000,\"long\":106.8167}" }
+          }
+        },
+        {
+          "name": "Check Point (outside)",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/check",
+            "body": { "mode": "raw", "raw": "{\"lat\":-6.9000,\"long\":107.6000}" }
+          }
+        },
+        {
+          "name": "List All Zones (admin)",
+          "request": { "method": "GET",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence"
+          }
+        },
+        {
+          "name": "Create Zone",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Building B\",\n  \"description\": \"Annex office\",\n  \"color\": \"#10b981\",\n  \"is_active\": true,\n  \"points\": [\n    {\"lat\": -6.1990, \"long\": 106.8150},\n    {\"lat\": -6.1990, \"long\": 106.8180},\n    {\"lat\": -6.2010, \"long\": 106.8180},\n    {\"lat\": -6.2010, \"long\": 106.8150}\n  ]\n}" }
+          }
+        },
+        {
+          "name": "Update Zone",
+          "request": { "method": "PUT",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/1",
+            "body": { "mode": "raw", "raw": "{\"name\":\"Main Office (Updated)\",\"is_active\":true}" }
+          }
+        },
+        {
+          "name": "Toggle Zone Active",
+          "request": { "method": "PATCH",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/1/toggle"
+          }
+        },
+        {
+          "name": "Delete Zone",
+          "request": { "method": "DELETE",
+            "header": [{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/geofence/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/users" }
+        },
+        {
+          "name": "Create User",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/users",
+            "body": { "mode": "raw", "raw": "{\"name\":\"Test User\",\"email\":\"test@co.com\",\"password\":\"pass123\",\"role_id\":4}" }
+          }
+        },
+        {
+          "name": "Assign Role",
+          "request": { "method": "PATCH",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/users/2/role",
+            "body": { "mode": "raw", "raw": "{\"role_id\":2}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/roles" }
+        },
+        {
+          "name": "Create Role",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/roles",
+            "body": { "mode": "raw", "raw": "{\"name\":\"supervisor\",\"display_name\":\"Supervisor\",\"description\":\"Team lead\",\"permission_ids\":[1,2,3,4,5]}" }
+          }
+        },
+        {
+          "name": "Set Role Permissions",
+          "request": { "method": "PUT",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/roles/2/permissions",
+            "body": { "mode": "raw", "raw": "{\"permission_ids\":[1,2,3,4,5,6]}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "List Permissions",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/permissions" }
+        },
+        {
+          "name": "Create Permission",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/permissions",
+            "body": { "mode": "raw", "raw": "{\"name\":\"report:export\",\"display_name\":\"Export Reports\",\"module\":\"report\",\"description\":\"Can export attendance reports to Excel\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "All Attendance",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/admin/attendance" }
+        },
+        {
+          "name": "Fraud Attendance",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/admin/attendance/fraud" }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "Register Device",
+          "request": { "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{token}}"}],
+            "url": "{{baseUrl}}/device/register",
+            "body": { "mode": "raw", "raw": "{\"device_id\":\"dev_test_001\",\"device_name\":\"My Laptop\",\"platform\":\"web\"}" }
+          }
+        },
+        {
+          "name": "List Devices",
+          "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{token}}"}], "url": "{{baseUrl}}/device" }
+        }
+      ]
+    }
+  ]
+}

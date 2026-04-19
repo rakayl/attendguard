@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-900 border border-slate-800 rounded-2xl;
+  }
+
+  .btn-primary {
+    @apply bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium px-5 py-2.5 rounded-xl transition-all duration-200 border border-slate-700 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium px-5 py-2.5 rounded-xl transition-all duration-200 border border-red-500/30 active:scale-95;
+  }
+
+  .input-field {
+    @apply bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 w-full focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 transition-all duration-200;
+  }
+
+  .badge-safe {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30;
+  }
+
+  .badge-suspicious {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30;
+  }
+
+  .badge-fraud {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-all duration-200 font-medium cursor-pointer;
+  }
+
+  .nav-item.active {
+    @apply text-cyan-400 bg-cyan-500/10 border border-cyan-500/20;
+  }
+}
+
+/* Leaflet map fixes */
+.leaflet-container {
+  background: #0f172a !important;
+  border-radius: 12px;
+  z-index: 0;
+}
+
+.leaflet-control-attribution {
+  display: none;
+}
+
+/* Animated gradient border */
+.gradient-border {
+  position: relative;
+  background: linear-gradient(#0f172a, #0f172a) padding-box,
+    linear-gradient(135deg, #06b6d4, #6366f1) border-box;
+  border: 1px solid transparent;
+  border-radius: 16px;
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+/* Score bar animation */
+@keyframes fillBar {
+  from { width: 0%; }
+}
+
+.score-bar {
+  animation: fillBar 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulse dot */
+.pulse-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}

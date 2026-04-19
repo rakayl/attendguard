@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: attendguard_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
+      POSTGRES_DB: ${DB_NAME:-attendance_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./migration.sql:/docker-entrypoint-initdb.d/01_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-attendance_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── Backend API ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: attendguard_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
+      DB_NAME: ${DB_NAME:-attendance_db}
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-64-char-random-secret-in-production!!}
+      OFFICE_LAT: ${OFFICE_LAT:--6.200000}
+      OFFICE_LONG: ${OFFICE_LONG:-106.816666}
+      GEOFENCE_RADIUS: ${GEOFENCE_RADIUS:-200}
+      GIN_MODE: ${GIN_MODE:-release}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/auth/login || true"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Frontend (Nginx + React build) ────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_OFFICE_LAT: ${OFFICE_LAT:--6.200000}
+        VITE_OFFICE_LNG: ${OFFICE_LONG:-106.816666}
+        VITE_GEOFENCE_RADIUS: ${GEOFENCE_RADIUS:-200}
+    container_name: attendguard_web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:80"
+
+volumes:
+  pg_data:
+    name: attendguard_pg_data
