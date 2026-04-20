@@ -9,8 +9,7 @@ import (
 	"attendance-system/internal/model"
 
 	"github.com/joho/godotenv"
-	"golang.org/x/crypto/bcrypt"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
