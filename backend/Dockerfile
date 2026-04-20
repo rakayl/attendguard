@@ -1,32 +1,46 @@
-# ========================
-# STAGE 1: BUILD
-# ========================
-FROM golang:1.24-alpine AS builder
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
 RUN apk add --no-cache git
 
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy go.mod (and go.sum if it exists)
+COPY go.mod ./
+COPY go.sum* ./
 
+# Generate go.sum and download deps in one step
+# GONOSUMCHECK and GOFLAGS allow working without a pre-existing go.sum
+RUN go mod tidy && go mod download
+
+# Copy all source files
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/main.go
+# Build main API server
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -o /app/attendguard \
+    ./cmd/main.go
 
+# Build standalone migrate CLI
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -o /app/migrate \
+    ./cmd/migrate
 
-# ========================
-# STAGE 2: RUN
-# ========================
+# ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM alpine:3.19
 
 WORKDIR /app
 
-RUN apk update && apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
-# ⬇️ INI YANG PENTING (ambil dari stage builder)
-COPY --from=builder /app/server .
+COPY --from=builder /app/attendguard .
+COPY --from=builder /app/migrate .
 
 EXPOSE 8080
 
-CMD ["./server"]
+# Server runs migrations automatically on startup.
+# To run migrations manually:
+#   docker exec attendguard_api ./migrate status
+CMD ["./attendguard"]
