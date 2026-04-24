@@ -7,9 +7,7 @@ import (
 	"os"
 
 	"attendance-system/internal/model"
-
 	"github.com/joho/godotenv"
-	"github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
