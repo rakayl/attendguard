@@ -29,22 +29,12 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 
 func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 	var user model.User
-
-	err := r.db.Where("email = ?", email).First(&user).Error
-
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil // ✅ ini penting
-		}
-		return nil, err // error lain
-	}
-
-	return &user, nil
+	return &user, r.db.Where("email = ?", email).First(&user).Error
 }
 
 func (r *userRepository) FindByEmailWithRole(email string) (*model.User, error) {
 	var user model.User
-	return &user, r.db.Preload("Role.Permissions").Where("email = ?", email).First(&user).Error
+	return &user, r.db.Preload("Tenant").Preload("Role.Permissions").Where("email = ?", email).First(&user).Error
 }
 
 func (r *userRepository) Create(user *model.User) error {
@@ -66,7 +56,7 @@ func (r *userRepository) FindByID(id uint) (*model.User, error) {
 
 func (r *userRepository) FindByIDWithRole(id uint) (*model.User, error) {
 	var user model.User
-	return &user, r.db.Preload("Role.Permissions").First(&user, id).Error
+	return &user, r.db.Preload("Tenant").Preload("Role.Permissions").First(&user, id).Error
 }
 
 func (r *userRepository) FindAll() ([]model.User, error) {
@@ -76,7 +66,7 @@ func (r *userRepository) FindAll() ([]model.User, error) {
 
 func (r *userRepository) FindAllWithRole() ([]model.User, error) {
 	var users []model.User
-	return users, r.db.Preload("Role.Permissions").Order("id").Find(&users).Error
+	return users, r.db.Preload("Tenant").Preload("Role.Permissions").Order("id").Find(&users).Error
 }
 
 // ---- Attendance Repository ----
@@ -139,7 +129,7 @@ func (r *attendanceRepository) FindActiveCheckIn(userID uint) (*model.Attendance
 
 func (r *attendanceRepository) FindAll() ([]model.AttendanceLog, error) {
 	var logs []model.AttendanceLog
-	if err := r.db.Preload("User").Preload("FraudFlags").
+	if err := r.db.Preload("User").Preload("User.Tenant").Preload("FraudFlags").
 		Order("created_at desc").
 		Find(&logs).Error; err != nil {
 		return nil, err
@@ -149,7 +139,7 @@ func (r *attendanceRepository) FindAll() ([]model.AttendanceLog, error) {
 
 func (r *attendanceRepository) FindFraud() ([]model.AttendanceLog, error) {
 	var logs []model.AttendanceLog
-	if err := r.db.Preload("User").Preload("FraudFlags").
+	if err := r.db.Preload("User").Preload("User.Tenant").Preload("FraudFlags").
 		Where("fraud_status IN ?", []string{"SUSPICIOUS", "FRAUD"}).
 		Order("fraud_score desc").
 		Find(&logs).Error; err != nil {
@@ -208,4 +198,87 @@ func (r *deviceRepository) FindByUserAndDeviceID(userID uint, deviceID string) (
 		return nil, err
 	}
 	return &device, nil
+}
+
+// ---- Tenant Repository ----
+
+type TenantRepository interface {
+	Create(tenant *model.Tenant) error
+	Update(tenant *model.Tenant) error
+	FindByID(id uint) (*model.Tenant, error)
+	FindAll() ([]model.Tenant, error)
+}
+
+type tenantRepository struct{ db *gorm.DB }
+
+func NewTenantRepository(db *gorm.DB) TenantRepository { return &tenantRepository{db} }
+
+func (r *tenantRepository) Create(tenant *model.Tenant) error { return r.db.Create(tenant).Error }
+func (r *tenantRepository) Update(tenant *model.Tenant) error { return r.db.Save(tenant).Error }
+func (r *tenantRepository) FindByID(id uint) (*model.Tenant, error) {
+	var tenant model.Tenant
+	if err := r.db.First(&tenant, id).Error; err != nil {
+		return nil, err
+	}
+	return &tenant, nil
+}
+func (r *tenantRepository) FindAll() ([]model.Tenant, error) {
+	var tenants []model.Tenant
+	return tenants, r.db.Order("id").Find(&tenants).Error
+}
+
+// ---- Face Profile Repository ----
+
+type FaceProfileRepository interface {
+	Create(profile *model.FaceProfile) error
+	Update(profile *model.FaceProfile) error
+	FindByID(id uint) (*model.FaceProfile, error)
+	FindByUserID(userID uint) ([]model.FaceProfile, error)
+	FindActiveByUserID(userID uint) (*model.FaceProfile, error)
+	FindAll() ([]model.FaceProfile, error)
+	DeactivateForUser(userID uint) error
+}
+
+type faceProfileRepository struct{ db *gorm.DB }
+
+func NewFaceProfileRepository(db *gorm.DB) FaceProfileRepository {
+	return &faceProfileRepository{db}
+}
+
+func (r *faceProfileRepository) Create(profile *model.FaceProfile) error {
+	return r.db.Create(profile).Error
+}
+
+func (r *faceProfileRepository) Update(profile *model.FaceProfile) error {
+	return r.db.Save(profile).Error
+}
+
+func (r *faceProfileRepository) FindByID(id uint) (*model.FaceProfile, error) {
+	var profile model.FaceProfile
+	if err := r.db.Preload("User").First(&profile, id).Error; err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
+func (r *faceProfileRepository) FindByUserID(userID uint) ([]model.FaceProfile, error) {
+	var profiles []model.FaceProfile
+	return profiles, r.db.Where("user_id = ?", userID).Order("created_at desc").Find(&profiles).Error
+}
+
+func (r *faceProfileRepository) FindActiveByUserID(userID uint) (*model.FaceProfile, error) {
+	var profile model.FaceProfile
+	if err := r.db.Where("user_id = ? AND is_active = true", userID).Order("created_at desc").First(&profile).Error; err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
+func (r *faceProfileRepository) FindAll() ([]model.FaceProfile, error) {
+	var profiles []model.FaceProfile
+	return profiles, r.db.Preload("User").Order("updated_at desc").Find(&profiles).Error
+}
+
+func (r *faceProfileRepository) DeactivateForUser(userID uint) error {
+	return r.db.Model(&model.FaceProfile{}).Where("user_id = ?", userID).Update("is_active", false).Error
 }

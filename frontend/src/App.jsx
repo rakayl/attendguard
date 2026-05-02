@@ -12,6 +12,7 @@ import UsersManagementPage from './pages/UsersManagementPage'
 import RolesPage from './pages/RolesPage'
 import PermissionsPage from './pages/PermissionsPage'
 import GeofencePage from './pages/GeofencePage'
+import FaceManagementPage from './pages/FaceManagementPage'
 import { useAuthStore } from './store/authStore'
 
 const RequireAuth = ({ children }) => {
@@ -49,6 +50,7 @@ const App = () => (
 
         {/* Geofence */}
         <Route path="admin/geofence" element={<RequirePermission perm="geofence:manage"><GeofencePage /></RequirePermission>} />
+        <Route path="admin/face" element={<RequirePermission perm="face:manage"><FaceManagementPage /></RequirePermission>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

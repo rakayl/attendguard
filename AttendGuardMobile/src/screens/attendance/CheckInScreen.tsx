@@ -8,7 +8,8 @@ import MapView, { Marker, Polygon, Circle } from 'react-native-maps'
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '../../theme'
 import { useAttendanceStore } from '../../store/attendanceStore'
 import { useGeofenceStore } from '../../store/geofenceStore'
-import { getCurrentLocation, getDeviceInfo } from '../../utils/location'
+import { useAuthStore } from '../../store/authStore'
+import { buildLocalFaceSample, getCurrentLocation, getDeviceInfo } from '../../utils/location'
 import { Card, FraudBadge, FraudScoreBar, FraudFlagItem, BlockAlert, Button } from '../../components/UI'
 
 interface LocationData {
@@ -27,6 +28,7 @@ interface ZoneStatus {
 export const CheckInScreen = () => {
   const { checkIn, checkOut, currentAttendance, loading } = useAttendanceStore()
   const { activeZones, fetchActiveZones, checkPoint } = useGeofenceStore()
+  const { user, isAdmin } = useAuthStore()
 
   const [location, setLocation] = useState<LocationData | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
@@ -36,9 +38,12 @@ export const CheckInScreen = () => {
   const [result, setResult] = useState<any | null>(null)
   const [blockInfo, setBlockInfo] = useState<{ code: string; reason: string } | null>(null)
   const [simulateFakeGps, setSimulateFakeGps] = useState(false)
+  const [faceImage, setFaceImage] = useState('')
 
   const isCheckedIn = !!currentAttendance
-  const isBlocked = simulateFakeGps || (zoneStatus !== null && !zoneStatus.inside_any_zone)
+  const adminTestingFakeGps = isAdmin() && simulateFakeGps
+  const isBlocked = adminTestingFakeGps || (zoneStatus !== null && !zoneStatus.inside_any_zone)
+  const canCaptureFace = !!location && !gpsLoading && !!zoneStatus?.inside_any_zone && !adminTestingFakeGps
 
   useEffect(() => {
     fetchActiveZones()
@@ -86,8 +91,12 @@ export const CheckInScreen = () => {
   const handleCheckIn = async () => {
     if (!location) { Alert.alert('Error', 'Enable GPS first'); return }
 
-    if (simulateFakeGps) {
+    if (adminTestingFakeGps) {
       setBlockInfo({ code: 'FAKE_GPS', reason: 'Disable GPS spoofing apps and try again.' })
+      return
+    }
+    if (!faceImage) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture face recognition after location is inside zone.' })
       return
     }
 
@@ -96,7 +105,8 @@ export const CheckInScreen = () => {
       lat: location.lat,
       long: location.long,
       accuracy: location.accuracy,
-      is_mock: location.is_mock || simulateFakeGps,
+      is_mock: location.is_mock || adminTestingFakeGps,
+      face_image: faceImage,
       device_time: new Date().toISOString(),
       device_id: deviceInfo.device_id,
     }
@@ -104,6 +114,7 @@ export const CheckInScreen = () => {
     const res = await checkIn(payload)
     if (res.success) {
       setResult(res.data)
+      setFaceImage('')
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code!, reason: res.error! })
@@ -115,8 +126,12 @@ export const CheckInScreen = () => {
   const handleCheckOut = async () => {
     if (!location) { Alert.alert('Error', 'Enable GPS first'); return }
 
-    if (simulateFakeGps || location.is_mock) {
+    if (adminTestingFakeGps || location.is_mock) {
       setBlockInfo({ code: 'FAKE_GPS', reason: 'Fake GPS detected. Cannot check out.' })
+      return
+    }
+    if (!faceImage) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture face recognition after location is inside zone.' })
       return
     }
 
@@ -126,6 +141,7 @@ export const CheckInScreen = () => {
       long: location.long,
       accuracy: location.accuracy,
       is_mock: false,
+      face_image: faceImage,
       device_time: new Date().toISOString(),
       device_id: deviceInfo.device_id,
     }
@@ -133,12 +149,20 @@ export const CheckInScreen = () => {
     const res = await checkOut(payload)
     if (res.success) {
       setResult(res.data)
+      setFaceImage('')
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code!, reason: res.error! })
     } else {
       Alert.alert('Failed', res.error)
     }
+  }
+
+  const captureFace = async () => {
+    if (!canCaptureFace) return
+    const sample = await buildLocalFaceSample(user?.id)
+    setFaceImage(sample)
+    setBlockInfo(null)
   }
 
   const mapRegion = location ? {
@@ -199,10 +223,10 @@ export const CheckInScreen = () => {
         bounces={false}
       >
         {/* Block alert */}
-        {(simulateFakeGps || blockInfo) && (
+        {(adminTestingFakeGps || blockInfo) && (
           <BlockAlert
-            code={simulateFakeGps ? 'FAKE_GPS' : blockInfo?.code || ''}
-            message={simulateFakeGps
+            code={adminTestingFakeGps ? 'FAKE_GPS' : blockInfo?.code || ''}
+            message={adminTestingFakeGps
               ? 'Fake GPS simulator is ON. Disable it to check in.'
               : blockInfo?.reason || ''}
           />
@@ -285,19 +309,35 @@ export const CheckInScreen = () => {
           </View>
         )}
 
-        {/* Fake GPS toggle (testing) */}
-        <View style={styles.toggleRow}>
-          <View>
-            <Text style={styles.toggleLabel}>Simulate Fake GPS</Text>
-            <Text style={styles.toggleSub}>For testing fraud detection</Text>
+        <View style={[styles.faceCard, faceImage && styles.faceCardReady]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Face Recognition</Text>
+            <Text style={styles.toggleSub}>
+              {faceImage ? 'Face sample captured' : 'Available after GPS is inside zone'}
+            </Text>
           </View>
-          <Switch
-            value={simulateFakeGps}
-            onValueChange={(v) => { setSimulateFakeGps(v); setBlockInfo(null) }}
-            trackColor={{ false: Colors.bgElevated, true: Colors.fraud }}
-            thumbColor={Colors.white}
+          <Button
+            title={faceImage ? 'Recapture' : 'Capture'}
+            onPress={captureFace}
+            disabled={!canCaptureFace}
+            variant={faceImage ? 'ghost' : 'secondary'}
           />
         </View>
+
+        {isAdmin() && (
+          <View style={styles.toggleRow}>
+            <View>
+              <Text style={styles.toggleLabel}>Simulate Fake GPS</Text>
+              <Text style={styles.toggleSub}>Admin testing only</Text>
+            </View>
+            <Switch
+              value={simulateFakeGps}
+              onValueChange={(v) => { setSimulateFakeGps(v); setBlockInfo(null) }}
+              trackColor={{ false: Colors.bgElevated, true: Colors.fraud }}
+              thumbColor={Colors.white}
+            />
+          </View>
+        )}
 
         {/* Main action button */}
         <TouchableOpacity
@@ -307,7 +347,7 @@ export const CheckInScreen = () => {
             : styles.actionBtnIn,
           ]}
           onPress={isCheckedIn ? handleCheckOut : handleCheckIn}
-          disabled={loading || gpsLoading || (!location && !simulateFakeGps) || isBlocked}
+          disabled={loading || gpsLoading || !location || isBlocked || !faceImage}
           activeOpacity={0.85}
         >
           {loading ? (
@@ -380,6 +420,8 @@ const styles = StyleSheet.create({
   sessionPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.safe },
   sessionText: { flex: 1, fontSize: FontSize.sm, color: Colors.safe, fontWeight: FontWeight.medium },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.bgCard, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md },
+  faceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, backgroundColor: Colors.bgCard, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md },
+  faceCardReady: { backgroundColor: Colors.safeBg, borderColor: Colors.safeBorder },
   toggleLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   toggleSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   actionBtn: { borderRadius: Radius.xl, height: 58, alignItems: 'center', justifyContent: 'center' },

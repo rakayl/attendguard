@@ -45,37 +45,21 @@ func (s *authService) Login(email, password string) (string, *model.User, error)
 }
 
 func (s *authService) Register(name, email, password string) (*model.User, error) {
-
-	// 🔥 STEP 1: cek email dengan error handling benar
-	existing, err := s.userRepo.FindByEmail(email)
-	if err != nil {
-		return nil, err
-	}
-
+	existing, _ := s.userRepo.FindByEmail(email)
 	if existing != nil {
 		return nil, errors.New("email already registered")
 	}
-
-	// 🔥 STEP 2: hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
-
-	// 🔥 STEP 3: create user
-	user := &model.User{
-		Name:     name,
-		Email:    email,
-		Password: string(hash),
-		IsActive: true,
-	}
-
+	user := &model.User{Name: name, Email: email, Password: string(hash), IsActive: true}
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, err
 	}
-
 	return user, nil
 }
+
 func (s *authService) generateToken(user *model.User) (string, error) {
 	// Embed permission names into token for fast middleware checks
 	permNames := user.PermissionNames()
@@ -90,6 +74,7 @@ func (s *authService) generateToken(user *model.User) (string, error) {
 
 	claims := jwt.MapClaims{
 		"user_id":         user.ID,
+		"tenant_id":       user.TenantID,
 		"email":           user.Email,
 		"role_name":       roleName,
 		"is_system_admin": isSystemAdmin,

@@ -15,6 +15,7 @@ export interface CheckInPayload {
   long: number
   accuracy: number
   is_mock: boolean
+  face_image: string
   device_time: string
   device_id: string
 }
@@ -82,4 +83,16 @@ export const permissionsAPI = {
   create: (payload: any) => api.post('/permissions', payload),
   update: (id: number, payload: any) => api.put(`/permissions/${id}`, payload),
   delete: (id: number) => api.delete(`/permissions/${id}`),
+}
+
+// Face recognition
+export const faceAPI = {
+  myProfiles: () => api.get('/face/me'),
+  enrollMe: (faceImage: string) => api.post('/face/enroll', { face_image: faceImage }),
+  verifyMe: (faceImage: string) => api.post('/face/verify', { face_image: faceImage }),
+  all: () => api.get('/admin/face'),
+  enrollForUser: (userId: number, faceImage: string) =>
+    api.post(`/admin/face/users/${userId}/enroll`, { face_image: faceImage }),
+  setActive: (id: number, isActive: boolean) =>
+    api.patch(`/admin/face/${id}/active`, { is_active: isActive }),
 }

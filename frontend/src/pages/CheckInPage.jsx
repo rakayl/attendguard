@@ -1,23 +1,30 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { useAttendanceStore } from '../store/attendanceStore'
 import { useGeofenceStore } from '../store/geofenceStore'
+import { useAuthStore } from '../store/authStore'
 import { getLocation, getDeviceInfo } from '../utils/gps'
+import { enrollMyFace } from '../api/services'
 import { FraudBadge, FraudScore, FraudFlagList } from '../components/FraudComponents'
+import FaceCapture from '../components/FaceCapture'
 
 const AttendanceMap = lazy(() => import('../components/AttendanceMap'))
 
 const CheckInPage = () => {
   const { checkIn, checkOut, currentAttendance, fetchHistory, loading } = useAttendanceStore()
   const { activeZones, fetchActiveZones, checkPoint } = useGeofenceStore()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role?.name === 'admin'
 
   const [gpsLoading, setGpsLoading] = useState(false)
   const [location, setLocation] = useState(null)
   const [gpsError, setGpsError] = useState('')
   const [result, setResult] = useState(null)
   const [isMockGps, setIsMockGps] = useState(false)
+  const [faceImage, setFaceImage] = useState('')
   const [blockInfo, setBlockInfo] = useState(null) // { code, reason } when hard-blocked
   const [zoneStatus, setZoneStatus] = useState(null) // ZoneCheckResult
   const [zoneChecking, setZoneChecking] = useState(false)
+  const [faceEnrollLoading, setFaceEnrollLoading] = useState(false)
 
   useEffect(() => {
     fetchHistory()
@@ -55,21 +62,26 @@ const CheckInPage = () => {
     if (!location) { setGpsError('Please enable GPS first'); return }
 
     // Client-side mock GPS block
-    if (isMockGps) {
+    if (isAdmin && isMockGps) {
       setBlockInfo({ code: 'FAKE_GPS', reason: 'Fake/mock GPS detected. Disable GPS spoofing apps and try again.' })
+      return
+    }
+    if (!faceImage) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture your face after GPS is inside the attendance zone.' })
       return
     }
 
     const deviceInfo = getDeviceInfo()
     const payload = {
       lat: location.lat, long: location.long, accuracy: location.accuracy,
-      is_mock: isMockGps, device_time: new Date().toISOString(),
+      is_mock: isAdmin && isMockGps, face_image: faceImage, device_time: new Date().toISOString(),
       device_id: deviceInfo.device_id,
     }
 
     const res = await checkIn(payload)
     if (res.success) {
       setResult(res.data)
+      setFaceImage('')
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code, reason: res.error })
@@ -78,21 +90,26 @@ const CheckInPage = () => {
 
   const handleCheckOut = async () => {
     if (!location) { setGpsError('Please enable GPS first'); return }
-    if (isMockGps) {
+    if (isAdmin && isMockGps) {
       setBlockInfo({ code: 'FAKE_GPS', reason: 'Fake/mock GPS detected. Disable GPS spoofing apps and try again.' })
+      return
+    }
+    if (!faceImage) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture your face after GPS is inside the attendance zone.' })
       return
     }
 
     const deviceInfo = getDeviceInfo()
     const payload = {
       lat: location.lat, long: location.long, accuracy: location.accuracy,
-      is_mock: isMockGps, device_time: new Date().toISOString(),
+      is_mock: isAdmin && isMockGps, face_image: faceImage, device_time: new Date().toISOString(),
       device_id: deviceInfo.device_id,
     }
 
     const res = await checkOut(payload)
     if (res.success) {
       setResult(res.data)
+      setFaceImage('')
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code, reason: res.error })
@@ -100,7 +117,24 @@ const CheckInPage = () => {
   }
 
   const isCheckedIn = !!currentAttendance
-  const isBlocked = isMockGps || (zoneStatus && !zoneStatus.inside_any_zone)
+  const isBlocked = (isAdmin && isMockGps) || (zoneStatus && !zoneStatus.inside_any_zone)
+  const canCaptureFace = !!location && !gpsLoading && !!zoneStatus?.inside_any_zone && !(isAdmin && isMockGps)
+
+  const handleEnrollMyFace = async () => {
+    if (!faceImage) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture a face sample before enrolling.' })
+      return
+    }
+    setFaceEnrollLoading(true)
+    setBlockInfo(null)
+    try {
+      await enrollMyFace(faceImage)
+    } catch (err) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Face enrollment failed.' })
+    } finally {
+      setFaceEnrollLoading(false)
+    }
+  }
 
   const formatTime = (t) => {
     if (!t) return '—'
@@ -116,16 +150,16 @@ const CheckInPage = () => {
       </div>
 
       {/* ── Hard Block Alert ─────────────────────────────────────────────── */}
-      {(isMockGps || blockInfo) && (
+      {((isAdmin && isMockGps) || blockInfo) && (
         <div className="card p-5 border-red-500/40 bg-red-500/10 glow-red animate-slide-up">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-2xl flex-shrink-0">🚫</div>
             <div>
               <div className="font-display font-bold text-red-400 mb-1">
-                {isMockGps ? 'Fake GPS Detected — Check-in Blocked' : blockInfo?.code === 'OUTSIDE_ZONE' ? 'Outside Attendance Zone — Blocked' : 'Check-in Blocked'}
+                {isAdmin && isMockGps ? 'Fake GPS Detected - Check-in Blocked' : blockInfo?.code === 'OUTSIDE_ZONE' ? 'Outside Attendance Zone - Blocked' : blockInfo?.code === 'FACE_REQUIRED' ? 'Face Recognition Required' : 'Check-in Blocked'}
               </div>
               <p className="text-sm text-red-300/80">
-                {isMockGps
+                {isAdmin && isMockGps
                   ? 'Your device is reporting a mock/fake GPS location. Disable any GPS spoofing or fake location apps, then try again. This action is logged.'
                   : blockInfo?.reason}
               </p>
@@ -220,8 +254,8 @@ const CheckInPage = () => {
           </>
         )}
 
-        {/* Mock GPS toggle (testing) */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+        {/* Mock GPS toggle (admin testing only) */}
+        {isAdmin && <div className="flex items-center justify-between pt-2 border-t border-slate-800">
           <div>
             <div className="text-xs text-slate-400 font-medium">Simulate Fake GPS</div>
             <div className="text-[10px] text-slate-600 font-mono">For testing — triggers immediate block</div>
@@ -230,8 +264,15 @@ const CheckInPage = () => {
             className={`relative w-11 h-6 rounded-full transition-all ${isMockGps ? 'bg-red-500' : 'bg-slate-700'}`}>
             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${isMockGps ? 'left-[22px]' : 'left-0.5'}`} />
           </button>
-        </div>
+        </div>}
       </div>
+
+      <FaceCapture value={faceImage} onCapture={setFaceImage} disabled={!canCaptureFace} />
+      {faceImage && (
+        <button onClick={handleEnrollMyFace} disabled={faceEnrollLoading} className="btn-secondary w-full text-sm disabled:opacity-50">
+          {faceEnrollLoading ? 'Saving face profile...' : 'Enroll / Replace My Face Profile'}
+        </button>
+      )}
 
       {/* Active check-in info */}
       {currentAttendance && (
@@ -259,7 +300,7 @@ const CheckInPage = () => {
       {/* Main action button */}
       <button
         onClick={isCheckedIn ? handleCheckOut : handleCheckIn}
-        disabled={loading || gpsLoading || !location || isBlocked}
+        disabled={loading || gpsLoading || !location || isBlocked || !faceImage}
         className={`w-full py-4 rounded-2xl font-display font-bold text-lg transition-all duration-200 active:scale-[0.98] ${
           isBlocked
             ? 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'

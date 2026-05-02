@@ -29,6 +29,7 @@ const Sidebar = () => {
   const showMonitoring = isAdmin || can('attendance:view_all') || can('attendance:view_fraud')
   const showAccessControl = isAdmin || can('user:view') || can('role:view') || can('permission:view')
   const showGeofence = isAdmin || can('geofence:manage')
+  const showFace = isAdmin || can('face:manage')
 
   return (
     <aside className="w-64 flex-shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 h-screen sticky top-0">
@@ -77,6 +78,13 @@ const Sidebar = () => {
           <>
             <SectionLabel>Location</SectionLabel>
             <NavItem path="/admin/geofence" icon="⬡" label="Geofence Zones" />
+          </>
+        )}
+
+        {showFace && (
+          <>
+            <SectionLabel>Biometric</SectionLabel>
+            <NavItem path="/admin/face" icon="●" label="Face Recognition" />
           </>
         )}
 

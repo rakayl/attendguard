@@ -1,31 +1,41 @@
 version: "3.9"
 
+# ── AttendGuard — Docker Compose Stack ────────────────────────────────────────
+#
+# Quick start:
+#   cp .env.example .env   # edit JWT_SECRET + DB_PASS
+#   docker compose up -d
+#
+# Migrate manually (without restarting server):
+#   docker compose run --rm migrate up
+#   docker compose run --rm migrate status
+#   docker compose run --rm migrate down
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
 
-  # ─────────────────────────────────────────
-  # 🐘 PostgreSQL
-  # ─────────────────────────────────────────
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: attendguard_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: absensi_db
+      POSTGRES_USER:     ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
+      POSTGRES_DB:       ${DB_NAME:-attendance_db}
     ports:
-      - "55:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d absensi_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-attendance_db}"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
-  # ─────────────────────────────────────────
-  # ⚙️ Backend (Golang API)
-  # ─────────────────────────────────────────
+  # ── Backend API (runs migrations on startup) ────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -36,25 +46,32 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PORT: 1001
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: postgres
-      DB_NAME: absensi_db
-      JWT_SECRET: super-secret
-      GIN_MODE: release
+      PORT:             8080
+      DB_HOST:          postgres
+      DB_PORT:          5432
+      DB_USER:          ${DB_USER:-postgres}
+      DB_PASS:          ${DB_PASS:-postgres}
+      DB_NAME:          ${DB_NAME:-attendance_db}
+      JWT_SECRET:       ${JWT_SECRET:-change-this-to-a-64-char-secret!!}
+      OFFICE_LAT:       ${OFFICE_LAT:--6.200000}
+      OFFICE_LONG:      ${OFFICE_LONG:-106.816666}
+      GEOFENCE_RADIUS:  ${GEOFENCE_RADIUS:-200}
+      GIN_MODE:         ${GIN_MODE:-release}
     ports:
-      - "1001:1001"
+      - "${API_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:1001/health | grep -q ok"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health | grep -q 'ok' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
-  # ─────────────────────────────────────────
-  # 🛠 Migration CLI (optional)
-  # ─────────────────────────────────────────
+  # ── Standalone migrate service (run-once, not always-running) ───────────────
+  # Usage: docker compose run --rm migrate <command>
+  # Examples:
+  #   docker compose run --rm migrate status
+  #   docker compose run --rm migrate down 2
+  #   docker compose run --rm migrate fresh
   migrate:
     build:
       context: ./backend
@@ -66,30 +83,31 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: postgres
-      DB_NAME: absensi_db
+      DB_HOST:  postgres
+      DB_PORT:  5432
+      DB_USER:  ${DB_USER:-postgres}
+      DB_PASS:  ${DB_PASS:-postgres}
+      DB_NAME:  ${DB_NAME:-attendance_db}
     profiles:
-      - tools
+      - tools   # not started with `docker compose up -d` by default
 
-  # ─────────────────────────────────────────
-  # 🌐 Frontend (React + Nginx)
-  # ─────────────────────────────────────────
+  # ── Frontend (nginx + React build) ─────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: /api
+        VITE_API_URL:        /api
+        VITE_OFFICE_LAT:     ${OFFICE_LAT:--6.200000}
+        VITE_OFFICE_LNG:     ${OFFICE_LONG:-106.816666}
+        VITE_GEOFENCE_RADIUS: ${GEOFENCE_RADIUS:-200}
     container_name: attendguard_web
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "9000:80"
+      - "${WEB_PORT:-3000}:80"
 
 volumes:
   pg_data:

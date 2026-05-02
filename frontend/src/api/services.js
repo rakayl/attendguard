@@ -33,3 +33,22 @@ export const getAllAttendance = () =>
 
 export const getFraudAttendance = () =>
   api.get('/admin/attendance/fraud')
+
+// Face recognition
+export const getMyFaceProfiles = () =>
+  api.get('/face/me')
+
+export const enrollMyFace = (faceImage) =>
+  api.post('/face/enroll', { face_image: faceImage })
+
+export const verifyMyFace = (faceImage) =>
+  api.post('/face/verify', { face_image: faceImage })
+
+export const getFaceProfiles = () =>
+  api.get('/admin/face')
+
+export const enrollFaceForUser = (userId, faceImage) =>
+  api.post(`/admin/face/users/${userId}/enroll`, { face_image: faceImage })
+
+export const setFaceProfileActive = (id, isActive) =>
+  api.patch(`/admin/face/${id}/active`, { is_active: isActive })

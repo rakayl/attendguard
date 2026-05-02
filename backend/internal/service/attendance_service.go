@@ -15,6 +15,7 @@ type CheckInRequest struct {
 	Long       float64    `json:"long" binding:"required"`
 	Accuracy   float64    `json:"accuracy"`
 	IsMock     bool       `json:"is_mock"`
+	FaceImage  string     `json:"face_image"`
 	DeviceTime *time.Time `json:"device_time"`
 	DeviceID   string     `json:"device_id"`
 	IPAddress  string     `json:"ip_address"`
@@ -25,6 +26,7 @@ type CheckOutRequest struct {
 	Long       float64    `json:"long" binding:"required"`
 	Accuracy   float64    `json:"accuracy"`
 	IsMock     bool       `json:"is_mock"`
+	FaceImage  string     `json:"face_image"`
 	DeviceTime *time.Time `json:"device_time"`
 	DeviceID   string     `json:"device_id"`
 }
@@ -32,7 +34,7 @@ type CheckOutRequest struct {
 // BlockedError signals a hard-blocked check-in (not just fraud-flagged)
 type BlockedError struct {
 	Reason string
-	Code   string // FAKE_GPS | OUTSIDE_ZONE
+	Code   string // FAKE_GPS | OUTSIDE_ZONE | FACE_REQUIRED | FACE_MISMATCH
 }
 
 func (e *BlockedError) Error() string { return e.Reason }
@@ -46,20 +48,24 @@ type AttendanceService interface {
 
 type attendanceService struct {
 	attendanceRepo repository.AttendanceRepository
+	userRepo       repository.UserRepository
 	deviceRepo     repository.DeviceRepository
 	fraudSvc       FraudDetectionService
 	geofenceSvc    GeofenceService
+	faceSvc        FaceRecognitionService
 	cfg            *config.Config
 }
 
 func NewAttendanceService(
 	attendanceRepo repository.AttendanceRepository,
+	userRepo repository.UserRepository,
 	deviceRepo repository.DeviceRepository,
 	fraudSvc FraudDetectionService,
 	geofenceSvc GeofenceService,
+	faceSvc FaceRecognitionService,
 	cfg *config.Config,
 ) AttendanceService {
-	return &attendanceService{attendanceRepo, deviceRepo, fraudSvc, geofenceSvc, cfg}
+	return &attendanceService{attendanceRepo, userRepo, deviceRepo, fraudSvc, geofenceSvc, faceSvc, cfg}
 }
 
 func (s *attendanceService) CheckIn(userID uint, req CheckInRequest) (*model.AttendanceLog, error) {
@@ -80,6 +86,11 @@ func (s *attendanceService) CheckIn(userID uint, req CheckInRequest) (*model.Att
 			msg = fmt.Sprintf("Check-in blocked: You are %.0f meters outside the allowed attendance zone.", zoneResult.DistanceOut)
 		}
 		return nil, &BlockedError{Reason: msg, Code: "OUTSIDE_ZONE"}
+	}
+
+	faceResult, err := s.verifyFaceForAttendance(userID, req.FaceImage)
+	if err != nil {
+		return nil, err
 	}
 
 	// ── Already checked in? ───────────────────────────────────────────────────
@@ -116,18 +127,25 @@ func (s *attendanceService) CheckIn(userID uint, req CheckInRequest) (*model.Att
 	fraudResult := s.fraudSvc.Analyze(fraudInput)
 
 	log := &model.AttendanceLog{
-		UserID:      userID,
-		Lat:         req.Lat,
-		Long:        req.Long,
-		Accuracy:    req.Accuracy,
-		CheckInAt:   &checkInAt,
-		DeviceTime:  req.DeviceTime,
-		ServerTime:  now,
-		FraudScore:  fraudResult.Score,
-		FraudStatus: fraudResult.Status,
-		IsMock:      false,
-		DeviceID:    req.DeviceID,
-		IPAddress:   req.IPAddress,
+		TenantID:      s.tenantIDForUser(userID),
+		UserID:        userID,
+		Lat:           req.Lat,
+		Long:          req.Long,
+		Accuracy:      req.Accuracy,
+		CheckInAt:     &checkInAt,
+		DeviceTime:    req.DeviceTime,
+		ServerTime:    now,
+		FraudScore:    fraudResult.Score,
+		FraudStatus:   fraudResult.Status,
+		GeoVerified:   true,
+		GeoZoneID:     nullableZoneID(zoneResult.ZoneID),
+		GeoZoneName:   zoneResult.ZoneName,
+		FaceVerified:  faceResult.Verified,
+		FaceScore:     faceResult.Score,
+		FaceProfileID: nullableZoneID(faceResult.ProfileID),
+		IsMock:        false,
+		DeviceID:      req.DeviceID,
+		IPAddress:     req.IPAddress,
 	}
 
 	if err := s.attendanceRepo.Create(log); err != nil {
@@ -150,6 +168,20 @@ func (s *attendanceService) CheckOut(userID uint, req CheckOutRequest) (*model.A
 			Reason: "Check-out blocked: Fake/mock GPS detected.",
 			Code:   "FAKE_GPS",
 		}
+	}
+
+	zoneResult := s.geofenceSvc.CheckPoint(req.Lat, req.Long)
+	if !zoneResult.InsideAnyZone {
+		msg := "Check-out blocked: You are outside the allowed attendance zone."
+		if zoneResult.DistanceOut > 0 {
+			msg = fmt.Sprintf("Check-out blocked: You are %.0f meters outside the allowed attendance zone.", zoneResult.DistanceOut)
+		}
+		return nil, &BlockedError{Reason: msg, Code: "OUTSIDE_ZONE"}
+	}
+
+	faceResult, err := s.verifyFaceForAttendance(userID, req.FaceImage)
+	if err != nil {
+		return nil, err
 	}
 
 	log, err := s.attendanceRepo.FindActiveCheckIn(userID)
@@ -184,6 +216,12 @@ func (s *attendanceService) CheckOut(userID uint, req CheckOutRequest) (*model.A
 	fraudResult := s.fraudSvc.Analyze(fraudInput)
 
 	log.CheckOutAt = &now
+	log.GeoVerified = true
+	log.GeoZoneID = nullableZoneID(zoneResult.ZoneID)
+	log.GeoZoneName = zoneResult.ZoneName
+	log.FaceVerified = faceResult.Verified
+	log.FaceScore = faceResult.Score
+	log.FaceProfileID = nullableZoneID(faceResult.ProfileID)
 	log.FraudScore = (log.FraudScore + fraudResult.Score) / 2
 	log.FraudStatus = determineFraudStatus(log.FraudScore)
 
@@ -197,6 +235,44 @@ func (s *attendanceService) CheckOut(userID uint, req CheckOutRequest) (*model.A
 	_ = s.attendanceRepo.SaveFlags(fraudResult.Flags)
 
 	return s.attendanceRepo.FindByID(log.ID)
+}
+
+func (s *attendanceService) verifyFaceForAttendance(userID uint, faceImage string) (*FaceVerificationResult, error) {
+	if faceImage == "" {
+		return nil, &BlockedError{
+			Reason: "Face recognition is required after location is verified.",
+			Code:   "FACE_REQUIRED",
+		}
+	}
+	result, err := s.faceSvc.Verify(userID, faceImage)
+	if err != nil {
+		return nil, &BlockedError{
+			Reason: "Face recognition blocked: " + err.Error(),
+			Code:   "FACE_REQUIRED",
+		}
+	}
+	if !result.Verified {
+		return nil, &BlockedError{
+			Reason: "Face recognition blocked: face does not match the enrolled employee.",
+			Code:   "FACE_MISMATCH",
+		}
+	}
+	return result, nil
+}
+
+func (s *attendanceService) tenantIDForUser(userID uint) uint {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil || user.TenantID == 0 {
+		return 1
+	}
+	return user.TenantID
+}
+
+func nullableZoneID(id uint) *uint {
+	if id == 0 {
+		return nil
+	}
+	return &id
 }
 
 func (s *attendanceService) History(userID uint) ([]model.AttendanceLog, error) {

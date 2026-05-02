@@ -15,6 +15,7 @@ import { ProfileScreen } from '../screens/profile/ProfileScreen'
 import { AdminAttendanceScreen } from '../screens/admin/AdminAttendanceScreen'
 import { AdminUsersScreen } from '../screens/admin/AdminUsersScreen'
 import { AdminRolesScreen } from '../screens/admin/AdminRolesScreen'
+import { AdminFaceScreen } from '../screens/admin/AdminFaceScreen'
 
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -48,11 +49,12 @@ const DrawerContent = ({ navigation, state }: any) => {
         <Text style={styles.drawerSection}>MONITORING</Text>
         {navItem('Attendance', 'All Attendance', '◈')}
         {(isAdmin() || can('attendance:view_fraud')) && navItem('Fraud', 'Fraud Alerts', '⊗')}
-        {(isAdmin() || can('user:view') || can('role:view')) && (
+        {(isAdmin() || can('user:view') || can('role:view') || can('face:manage')) && (
           <>
             <Text style={styles.drawerSection}>ACCESS CONTROL</Text>
             {(isAdmin() || can('user:view')) && navItem('Users', 'Users', '◉')}
             {(isAdmin() || can('role:view')) && navItem('Roles', 'Roles & Permissions', '◈')}
+            {(isAdmin() || can('face:manage')) && navItem('Face', 'Face Recognition', '●')}
           </>
         )}
       </DrawerContentScrollView>
@@ -71,6 +73,7 @@ const AdminDrawer = () => (
     <Drawer.Screen name="Fraud" component={AdminAttendanceScreen} />
     <Drawer.Screen name="Users" component={AdminUsersScreen} />
     <Drawer.Screen name="Roles" component={AdminRolesScreen} />
+    <Drawer.Screen name="Face" component={AdminFaceScreen} />
   </Drawer.Navigator>
 )
 

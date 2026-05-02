@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"attendance-system/internal/model"
+
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -57,8 +59,8 @@ func OpenRawDB(cfg *Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(30)
+	db.SetMaxIdleConns(10)
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("ping failed: %w", err)
 	}
@@ -67,9 +69,19 @@ func OpenRawDB(cfg *Config) (*sql.DB, error) {
 
 // InitDB opens a GORM connection for use by repositories and services.
 func InitDB(cfg *Config) (*gorm.DB, error) {
-	return gorm.Open(postgres.Open(dsn(cfg)), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(dsn(cfg)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetMaxIdleConns(50)
+	return db, nil
 }
 
 // SeedSampleGeofence seeds a default geofence zone around the configured

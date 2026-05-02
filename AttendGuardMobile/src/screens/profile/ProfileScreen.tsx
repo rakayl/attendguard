@@ -5,8 +5,8 @@ import {
 } from 'react-native'
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme'
 import { useAuthStore } from '../../store/authStore'
-import { deviceAPI } from '../../api/services'
-import { getDeviceInfo } from '../../utils/location'
+import { deviceAPI, faceAPI } from '../../api/services'
+import { buildLocalFaceSample, getDeviceInfo } from '../../utils/location'
 import { Card, Button } from '../../components/UI'
 
 const MODULE_COLORS: Record<string, string> = {
@@ -23,6 +23,8 @@ export const ProfileScreen = () => {
   const { user, logout, isAdmin, can } = useAuthStore()
   const [registering, setRegistering] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [enrollingFace, setEnrollingFace] = useState(false)
+  const [faceEnrolled, setFaceEnrolled] = useState(false)
 
   const permissions = user?.role?.permissions || []
   const grouped = permissions.reduce((acc: Record<string, any[]>, p) => {
@@ -42,6 +44,20 @@ export const ProfileScreen = () => {
       Alert.alert('Error', err.response?.data?.error || 'Registration failed')
     } finally {
       setRegistering(false)
+    }
+  }
+
+  const handleEnrollFace = async () => {
+    setEnrollingFace(true)
+    try {
+      const sample = await buildLocalFaceSample(user?.id)
+      await faceAPI.enrollMe(sample)
+      setFaceEnrolled(true)
+      Alert.alert('Success', 'Face profile enrolled successfully.')
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Face enrollment failed')
+    } finally {
+      setEnrollingFace(false)
     }
   }
 
@@ -142,6 +158,21 @@ export const ProfileScreen = () => {
             loading={registering}
             disabled={registered}
             variant={registered ? 'ghost' : 'secondary'}
+            style={styles.deviceBtn}
+          />
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>FACE RECOGNITION</Text>
+          <Text style={styles.deviceHint}>
+            Enroll this profile before using check-in or check-out. Attendance requires GPS inside zone and a matching face sample.
+          </Text>
+          <Button
+            title={faceEnrolled ? 'Face Profile Enrolled' : 'Enroll Face Profile'}
+            onPress={handleEnrollFace}
+            loading={enrollingFace}
+            disabled={faceEnrolled}
+            variant={faceEnrolled ? 'ghost' : 'secondary'}
             style={styles.deviceBtn}
           />
         </Card>

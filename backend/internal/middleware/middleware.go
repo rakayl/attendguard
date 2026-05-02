@@ -39,6 +39,11 @@ func JWTAuth(secret string) gin.HandlerFunc {
 			return
 		}
 		c.Set("user_id", uint(claims["user_id"].(float64)))
+		if tenantID, ok := claims["tenant_id"].(float64); ok {
+			c.Set("tenant_id", uint(tenantID))
+		} else {
+			c.Set("tenant_id", uint(1))
+		}
 		c.Set("email", claims["email"])
 		c.Set("role_name", claims["role_name"])
 		isAdmin, _ := claims["is_system_admin"].(bool)

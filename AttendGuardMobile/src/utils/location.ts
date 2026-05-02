@@ -60,6 +60,13 @@ export const getDeviceInfo = async () => {
   return { device_id: deviceId, device_name: deviceName, platform }
 }
 
+export const buildLocalFaceSample = async (userId?: number | string) => {
+  const info = await getDeviceInfo()
+  const seed = `attendguard-face:${userId || 'self'}:${info.device_id}:${info.platform}`
+  const repeated = Array(80).fill(seed).join('|')
+  return `data:text/plain;base64,${repeated}`
+}
+
 // Haversine distance in meters
 export const haversineDistance = (
   lat1: number, lon1: number,
