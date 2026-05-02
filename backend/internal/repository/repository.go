@@ -29,7 +29,17 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 
 func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 	var user model.User
-	return &user, r.db.Where("email = ?", email).First(&user).Error
+
+	err := r.db.Where("email = ?", email).First(&user).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // ✅ ini penting
+		}
+		return nil, err // error lain
+	}
+
+	return &user, nil
 }
 
 func (r *userRepository) FindByEmailWithRole(email string) (*model.User, error) {
