@@ -52,3 +52,19 @@ export const enrollFaceForUser = (userId, faceImage) =>
 
 export const setFaceProfileActive = (id, isActive) =>
   api.patch(`/admin/face/${id}/active`, { is_active: isActive })
+
+// Daily activities
+export const getActivities = (params) =>
+  api.get('/activities', { params })
+
+export const getActivity = (id) =>
+  api.get(`/activities/${id}`)
+
+export const createActivity = (payload) =>
+  api.post('/activities', payload)
+
+export const updateActivity = (id, payload) =>
+  api.put(`/activities/${id}`, payload)
+
+export const deleteActivity = (id) =>
+  api.delete(`/activities/${id}`)

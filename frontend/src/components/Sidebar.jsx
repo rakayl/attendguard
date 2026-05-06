@@ -50,6 +50,9 @@ const Sidebar = () => {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         <SectionLabel>Main</SectionLabel>
         <NavItem path="/dashboard" icon="⬡" label="Dashboard" />
+        {(isAdmin || can('activity:view')) && (
+          <NavItem path="/activities" icon="✎" label="Daily Activity" />
+        )}
         {(isAdmin || can('attendance:check_in') || can('attendance:check_out')) && (
           <NavItem path="/checkin" icon="◎" label="Check In / Out" />
         )}

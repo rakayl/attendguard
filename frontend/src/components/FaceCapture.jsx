@@ -5,25 +5,52 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const [cameraOn, setCameraOn] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
   const [error, setError] = useState('')
 
   const stopCamera = () => {
     streamRef.current?.getTracks?.().forEach((track) => track.stop())
     streamRef.current = null
     setCameraOn(false)
+    setVideoReady(false)
   }
 
   useEffect(() => stopCamera, [])
 
+  useEffect(() => {
+    const attachStream = async () => {
+      if (!cameraOn || !videoRef.current || !streamRef.current) return
+      const video = videoRef.current
+      video.srcObject = streamRef.current
+      try {
+        await video.play()
+      } catch {
+        setError('Camera is allowed, but the browser could not start video playback. Try closing other apps using the camera.')
+      }
+    }
+    attachStream()
+  }, [cameraOn])
+
   const startCamera = async () => {
     setError('')
+    setVideoReady(false)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('This browser does not support camera access on this page.')
+        return
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
       setCameraOn(true)
-    } catch {
-      setError('Camera permission is required for face recognition.')
+    } catch (err) {
+      setError(err?.message || 'Camera permission is required for face recognition.')
     }
   }
 
@@ -31,6 +58,10 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
+    if (!videoReady || video.videoWidth === 0 || video.videoHeight === 0) {
+      setError('Camera is still starting. Wait until the preview appears, then capture again.')
+      return
+    }
     canvas.width = 320
     canvas.height = 240
     const ctx = canvas.getContext('2d')
@@ -54,7 +85,22 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
       {error && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</div>}
 
       {cameraOn && (
-        <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-lg bg-black aspect-video object-cover" />
+        <div className="relative overflow-hidden rounded-lg bg-black aspect-video">
+          {!videoReady && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
+              Starting camera...
+            </div>
+          )}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            onLoadedMetadata={() => setVideoReady(true)}
+            onCanPlay={() => setVideoReady(true)}
+            className="w-full h-full object-cover"
+          />
+        </div>
       )}
       <canvas ref={canvasRef} className="hidden" />
 
@@ -65,7 +111,7 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
           </button>
         ) : (
           <>
-            <button type="button" onClick={capture} className="btn-primary flex-1 text-sm">Capture Face</button>
+            <button type="button" onClick={capture} disabled={!videoReady} className="btn-primary flex-1 text-sm disabled:opacity-50">Capture Face</button>
             <button type="button" onClick={stopCamera} className="btn-secondary text-sm">Cancel</button>
           </>
         )}

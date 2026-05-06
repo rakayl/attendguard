@@ -200,6 +200,79 @@ func (r *deviceRepository) FindByUserAndDeviceID(userID uint, deviceID string) (
 	return &device, nil
 }
 
+// ---- Daily Activity Repository ----
+
+type DailyActivityFilter struct {
+	TenantID uint
+	UserID   *uint
+	DateFrom *string
+	DateTo   *string
+}
+
+type DailyActivityRepository interface {
+	Create(activity *model.DailyActivity) error
+	Update(activity *model.DailyActivity) error
+	Delete(id uint) error
+	FindByID(id uint) (*model.DailyActivity, error)
+	FindAll(filter DailyActivityFilter) ([]model.DailyActivity, error)
+	FindOverlap(tenantID, userID uint, activityDate string, startMinute, endMinute int, excludeID *uint) (*model.DailyActivity, error)
+}
+
+type dailyActivityRepository struct{ db *gorm.DB }
+
+func NewDailyActivityRepository(db *gorm.DB) DailyActivityRepository {
+	return &dailyActivityRepository{db: db}
+}
+
+func (r *dailyActivityRepository) Create(activity *model.DailyActivity) error {
+	return r.db.Create(activity).Error
+}
+
+func (r *dailyActivityRepository) Update(activity *model.DailyActivity) error {
+	return r.db.Save(activity).Error
+}
+
+func (r *dailyActivityRepository) Delete(id uint) error {
+	return r.db.Delete(&model.DailyActivity{}, id).Error
+}
+
+func (r *dailyActivityRepository) FindByID(id uint) (*model.DailyActivity, error) {
+	var activity model.DailyActivity
+	if err := r.db.Preload("User").Preload("User.Role").First(&activity, id).Error; err != nil {
+		return nil, err
+	}
+	return &activity, nil
+}
+
+func (r *dailyActivityRepository) FindAll(filter DailyActivityFilter) ([]model.DailyActivity, error) {
+	var activities []model.DailyActivity
+	query := r.db.Preload("User").Preload("User.Role").Where("tenant_id = ?", filter.TenantID)
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.DateFrom != nil {
+		query = query.Where("activity_date >= ?", *filter.DateFrom)
+	}
+	if filter.DateTo != nil {
+		query = query.Where("activity_date <= ?", *filter.DateTo)
+	}
+	err := query.Order("activity_date asc").Order("start_minute asc").Order("updated_at asc").Find(&activities).Error
+	return activities, err
+}
+
+func (r *dailyActivityRepository) FindOverlap(tenantID, userID uint, activityDate string, startMinute, endMinute int, excludeID *uint) (*model.DailyActivity, error) {
+	var activity model.DailyActivity
+	query := r.db.Where("tenant_id = ? AND user_id = ? AND activity_date = ?", tenantID, userID, activityDate).
+		Where("start_minute < ? AND end_minute > ?", endMinute, startMinute)
+	if excludeID != nil {
+		query = query.Where("id <> ?", *excludeID)
+	}
+	if err := query.First(&activity).Error; err != nil {
+		return nil, err
+	}
+	return &activity, nil
+}
+
 // ---- Tenant Repository ----
 
 type TenantRepository interface {

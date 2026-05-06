@@ -123,6 +123,23 @@ type Device struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type DailyActivity struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	TenantID     uint      `gorm:"not null;default:1;index" json:"tenant_id"`
+	UserID       uint      `gorm:"not null;index" json:"user_id"`
+	User         User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Title        string    `gorm:"size:120;not null" json:"title"`
+	Description  string    `gorm:"type:text" json:"description"`
+	ActivityDate time.Time `gorm:"type:date;not null;index" json:"activity_date"`
+	StartMinute  int       `gorm:"not null;index" json:"start_minute"`
+	EndMinute    int       `gorm:"not null" json:"end_minute"`
+	Status       string    `gorm:"size:20;not null;default:'planned'" json:"status"`
+	Progress     int       `gorm:"not null;default:0" json:"progress"`
+	Version      int       `gorm:"not null;default:1" json:"version"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // ============================================================
 // Geofence Models
 // ============================================================

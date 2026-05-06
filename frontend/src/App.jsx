@@ -13,6 +13,7 @@ import RolesPage from './pages/RolesPage'
 import PermissionsPage from './pages/PermissionsPage'
 import GeofencePage from './pages/GeofencePage'
 import FaceManagementPage from './pages/FaceManagementPage'
+import DailyActivityPage from './pages/DailyActivityPage'
 import { useAuthStore } from './store/authStore'
 
 const RequireAuth = ({ children }) => {
@@ -35,6 +36,7 @@ const App = () => (
       <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="activities" element={<RequirePermission perm="activity:view"><DailyActivityPage /></RequirePermission>} />
         <Route path="checkin" element={<CheckInPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="devices" element={<DevicesPage />} />

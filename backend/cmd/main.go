@@ -49,6 +49,7 @@ func main() {
 	roleRepo := repository.NewRoleRepository(db)
 	geofenceRepo := repository.NewGeofenceRepository(db)
 	faceRepo := repository.NewFaceProfileRepository(db)
+	dailyActivityRepo := repository.NewDailyActivityRepository(db)
 
 	// ── 6. Services ───────────────────────────────────────────────────────────
 	fraudSvc := service.NewFraudDetectionService(cfg)
@@ -61,6 +62,7 @@ func main() {
 	permSvc := service.NewPermissionService(permRepo)
 	roleSvc := service.NewRoleService(roleRepo)
 	userMgmtSvc := service.NewUserManagementService(userRepo)
+	dailyActivitySvc := service.NewDailyActivityService(dailyActivityRepo)
 
 	// ── 7. Handlers ───────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc)
@@ -72,6 +74,7 @@ func main() {
 	userMgmtHandler := handler.NewUserManagementHandler(userMgmtSvc)
 	geofenceHandler := handler.NewGeofenceHandler(geofenceSvc)
 	faceHandler := handler.NewFaceHandler(faceSvc)
+	dailyActivityHandler := handler.NewDailyActivityHandler(dailyActivitySvc, userMgmtSvc)
 
 	// ── 8. Router ─────────────────────────────────────────────────────────────
 	r := gin.Default()
@@ -135,6 +138,13 @@ func main() {
 		protected.GET("/face/me", middleware.RequirePermission("face:enroll"), faceHandler.MyProfiles)
 		protected.POST("/face/enroll", middleware.RequirePermission("face:enroll"), faceHandler.EnrollSelf)
 		protected.POST("/face/verify", middleware.RequirePermission("face:verify"), faceHandler.VerifySelf)
+
+		// Daily Activity
+		protected.GET("/activities", middleware.RequirePermission("activity:view"), dailyActivityHandler.List)
+		protected.GET("/activities/:id", middleware.RequirePermission("activity:view"), dailyActivityHandler.Get)
+		protected.POST("/activities", middleware.RequirePermission("activity:create"), dailyActivityHandler.Create)
+		protected.PUT("/activities/:id", middleware.RequirePermission("activity:update_own"), dailyActivityHandler.Update)
+		protected.DELETE("/activities/:id", middleware.RequirePermission("activity:delete_own"), dailyActivityHandler.Delete)
 
 		// Device
 		protected.POST("/device/register", middleware.RequirePermission("device:register"), deviceHandler.Register)
