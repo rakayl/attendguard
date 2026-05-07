@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Platform, StatusBar, Switch,
 } from 'react-native'
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions'
-import MapView, { Marker, Polygon, Circle } from 'react-native-maps'
+import MapView, { Marker, Polygon } from 'react-native-maps'
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '../../theme'
 import { useAttendanceStore } from '../../store/attendanceStore'
 import { useGeofenceStore } from '../../store/geofenceStore'
 import { useAuthStore } from '../../store/authStore'
+import { faceAPI } from '../../api/services'
 import { buildLocalFaceSample, getCurrentLocation, getDeviceInfo } from '../../utils/location'
-import { Card, FraudBadge, FraudScoreBar, FraudFlagItem, BlockAlert, Button } from '../../components/UI'
+import { Card, FraudBadge, FraudScoreBar, FraudFlagItem, BlockAlert, Button, FacePositionGuide } from '../../components/UI'
 
 interface LocationData {
   lat: number
@@ -39,15 +40,20 @@ export const CheckInScreen = () => {
   const [blockInfo, setBlockInfo] = useState<{ code: string; reason: string } | null>(null)
   const [simulateFakeGps, setSimulateFakeGps] = useState(false)
   const [faceImage, setFaceImage] = useState('')
+  const [hasFaceProfile, setHasFaceProfile] = useState(false)
+  const [verifyingFace, setVerifyingFace] = useState(false)
+  const [faceVerified, setFaceVerified] = useState(false)
 
   const isCheckedIn = !!currentAttendance
   const adminTestingFakeGps = isAdmin() && simulateFakeGps
   const isBlocked = adminTestingFakeGps || (zoneStatus !== null && !zoneStatus.inside_any_zone)
   const canCaptureFace = !!location && !gpsLoading && !!zoneStatus?.inside_any_zone && !adminTestingFakeGps
+  const canSubmitAttendance = hasFaceProfile && faceVerified && !verifyingFace && !isBlocked
 
   useEffect(() => {
     fetchActiveZones()
     requestLocationAndFetch()
+    loadFaceStatus()
   }, [])
 
   // Pre-check zone when location changes
@@ -59,6 +65,21 @@ export const CheckInScreen = () => {
       .catch(() => setZoneStatus(null))
       .finally(() => setZoneChecking(false))
   }, [location?.lat, location?.long])
+
+  const loadFaceStatus = async () => {
+    try {
+      const res = await faceAPI.myProfiles()
+      const profiles = res.data?.profiles || []
+      const hasActiveProfile = profiles.some((profile: any) => profile.is_active)
+      setHasFaceProfile(hasActiveProfile)
+      if (!hasActiveProfile) {
+        setFaceVerified(false)
+      }
+    } catch {
+      setHasFaceProfile(false)
+      setFaceVerified(false)
+    }
+  }
 
   const requestLocationAndFetch = async () => {
     const permission = Platform.OS === 'ios'
@@ -99,6 +120,10 @@ export const CheckInScreen = () => {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture face recognition after location is inside zone.' })
       return
     }
+    if (!hasFaceProfile || !faceVerified) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Face verification must match the active account before check-in can continue.' })
+      return
+    }
 
     const deviceInfo = await getDeviceInfo()
     const payload = {
@@ -134,6 +159,10 @@ export const CheckInScreen = () => {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture face recognition after location is inside zone.' })
       return
     }
+    if (!hasFaceProfile || !faceVerified) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Face verification must match the active account before check-out can continue.' })
+      return
+    }
 
     const deviceInfo = await getDeviceInfo()
     const payload = {
@@ -160,9 +189,24 @@ export const CheckInScreen = () => {
 
   const captureFace = async () => {
     if (!canCaptureFace) return
+    setVerifyingFace(true)
+    setFaceVerified(false)
     const sample = await buildLocalFaceSample(user?.id)
     setFaceImage(sample)
-    setBlockInfo(null)
+    try {
+      const res = await faceAPI.verifyMe(sample)
+      if (res.data?.verified) {
+        setFaceVerified(true)
+        setBlockInfo(null)
+      } else {
+        setBlockInfo({ code: 'FACE_MISMATCH', reason: res.data?.message || 'Face does not match the active account profile.' })
+      }
+    } catch (err: any) {
+      setFaceVerified(false)
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Enroll face recognition for this account first.' })
+    } finally {
+      setVerifyingFace(false)
+    }
   }
 
   const mapRegion = location ? {
@@ -313,16 +357,35 @@ export const CheckInScreen = () => {
           <View style={{ flex: 1 }}>
             <Text style={styles.toggleLabel}>Face Recognition</Text>
             <Text style={styles.toggleSub}>
-              {faceImage ? 'Face sample captured' : 'Available after GPS is inside zone'}
+              {!hasFaceProfile
+                ? 'Enroll face profile on this account first'
+                : verifyingFace
+                ? 'Verifying face sample...'
+                : faceVerified
+                ? 'Face verified for this account'
+                : faceImage
+                ? 'Face captured but not verified'
+                : 'Available after GPS is inside zone'}
             </Text>
           </View>
           <Button
             title={faceImage ? 'Recapture' : 'Capture'}
             onPress={captureFace}
-            disabled={!canCaptureFace}
+            disabled={!canCaptureFace || !hasFaceProfile || verifyingFace}
             variant={faceImage ? 'ghost' : 'secondary'}
           />
         </View>
+
+        <FacePositionGuide title={isCheckedIn ? 'Check-Out Position' : 'Check-In Position'} compact />
+
+        {!hasFaceProfile && (
+          <View style={styles.faceStatusCard}>
+            <Text style={styles.faceStatusTitle}>Face profile belum terdaftar</Text>
+            <Text style={styles.faceStatusText}>
+              Akun yang sedang login wajib punya face recognition sendiri. Tambahkan dulu di halaman Profile sebelum tombol attendance aktif.
+            </Text>
+          </View>
+        )}
 
         {isAdmin() && (
           <View style={styles.toggleRow}>
@@ -347,7 +410,7 @@ export const CheckInScreen = () => {
             : styles.actionBtnIn,
           ]}
           onPress={isCheckedIn ? handleCheckOut : handleCheckIn}
-          disabled={loading || gpsLoading || !location || isBlocked || !faceImage}
+          disabled={loading || gpsLoading || !location || !faceImage || !canSubmitAttendance}
           activeOpacity={0.85}
         >
           {loading ? (
@@ -422,6 +485,9 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.bgCard, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md },
   faceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, backgroundColor: Colors.bgCard, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md },
   faceCardReady: { backgroundColor: Colors.safeBg, borderColor: Colors.safeBorder },
+  faceStatusCard: { backgroundColor: Colors.suspiciousBg, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.suspiciousBorder, padding: Spacing.md },
+  faceStatusTitle: { fontSize: FontSize.sm, color: Colors.suspicious, fontWeight: FontWeight.semibold, marginBottom: 4 },
+  faceStatusText: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
   toggleLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   toggleSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   actionBtn: { borderRadius: Radius.xl, height: 58, alignItems: 'center', justifyContent: 'center' },

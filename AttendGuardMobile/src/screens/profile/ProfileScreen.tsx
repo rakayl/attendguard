@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, StatusBar, Switch,
@@ -7,7 +7,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme'
 import { useAuthStore } from '../../store/authStore'
 import { deviceAPI, faceAPI } from '../../api/services'
 import { buildLocalFaceSample, getDeviceInfo } from '../../utils/location'
-import { Card, Button } from '../../components/UI'
+import { Card, Button, FacePositionGuide } from '../../components/UI'
 
 const MODULE_COLORS: Record<string, string> = {
   attendance: Colors.primary,
@@ -25,6 +25,20 @@ export const ProfileScreen = () => {
   const [registered, setRegistered] = useState(false)
   const [enrollingFace, setEnrollingFace] = useState(false)
   const [faceEnrolled, setFaceEnrolled] = useState(false)
+
+  const loadFaceStatus = async () => {
+    try {
+      const res = await faceAPI.myProfiles()
+      const profiles = res.data?.profiles || []
+      setFaceEnrolled(profiles.some((profile: any) => profile.is_active))
+    } catch {
+      setFaceEnrolled(false)
+    }
+  }
+
+  useEffect(() => {
+    loadFaceStatus()
+  }, [])
 
   const permissions = user?.role?.permissions || []
   const grouped = permissions.reduce((acc: Record<string, any[]>, p) => {
@@ -52,7 +66,7 @@ export const ProfileScreen = () => {
     try {
       const sample = await buildLocalFaceSample(user?.id)
       await faceAPI.enrollMe(sample)
-      setFaceEnrolled(true)
+      await loadFaceStatus()
       Alert.alert('Success', 'Face profile enrolled successfully.')
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Face enrollment failed')
@@ -165,8 +179,9 @@ export const ProfileScreen = () => {
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>FACE RECOGNITION</Text>
           <Text style={styles.deviceHint}>
-            Enroll this profile before using check-in or check-out. Attendance requires GPS inside zone and a matching face sample.
+            Enroll the active account face first. Admin, employee, and every other account must each store their own face profile before check-in or check-out can be used.
           </Text>
+          <FacePositionGuide title="Enrollment Position" compact />
           <Button
             title={faceEnrolled ? 'Face Profile Enrolled' : 'Enroll Face Profile'}
             onPress={handleEnrollFace}

@@ -86,6 +86,13 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
 
       {cameraOn && (
         <div className="relative overflow-hidden rounded-lg bg-black aspect-video">
+          <div className="pointer-events-none absolute inset-3 z-10 rounded-3xl border-2 border-dashed border-emerald-400/70">
+            <div className="absolute left-1/2 top-4 h-4 w-16 -translate-x-1/2 rounded-full border border-emerald-300/60" />
+            <div className="absolute left-1/2 top-1/2 h-24 w-32 -translate-x-1/2 -translate-y-1/2 rounded-[42%] border-2 border-emerald-300/80" />
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/70 px-3 py-1 text-[10px] font-mono text-emerald-300">
+              Head centered • Eyes level • Face forward
+            </div>
+          </div>
           {!videoReady && (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
               Starting camera...
@@ -103,6 +110,10 @@ const FaceCapture = ({ value, onCapture, disabled = false, compact = false }) =>
         </div>
       )}
       <canvas ref={canvasRef} className="hidden" />
+
+      <div className="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
+        Position guide: forehead and chin stay inside the frame, look straight ahead, keep your head upright, and avoid masks or heavy shadows.
+      </div>
 
       <div className="flex gap-2">
         {!cameraOn ? (

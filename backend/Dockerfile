@@ -1,10 +1,7 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM golang:1.23-alpine AS builder
+FROM golang:1.23-alpine3.19 AS builder
 
 WORKDIR /app
-
-# Install git (needed for some go mod downloads)
-RUN apk add --no-cache git
 
 # Download dependencies first (layer cache)
 COPY go.mod go.sum* ./

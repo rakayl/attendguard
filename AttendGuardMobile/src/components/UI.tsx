@@ -181,10 +181,36 @@ export const BlockAlert = ({ code, message }: { code: string; message: string })
     <Text style={styles.blockIcon}>🚫</Text>
     <View style={styles.blockContent}>
       <Text style={styles.blockTitle}>
-        {code === 'FAKE_GPS' ? 'Fake GPS Detected — Blocked' : 'Outside Zone — Blocked'}
+        {code === 'FAKE_GPS'
+          ? 'Fake GPS Detected - Blocked'
+          : code === 'FACE_REQUIRED'
+          ? 'Face Profile Required'
+          : code === 'FACE_MISMATCH'
+          ? 'Face Verification Failed'
+          : 'Outside Zone - Blocked'}
       </Text>
       <Text style={styles.blockMessage}>{message}</Text>
     </View>
+  </View>
+)
+
+export const FacePositionGuide = ({
+  title = 'Head Position Guide',
+  compact = false,
+}: {
+  title?: string
+  compact?: boolean
+}) => (
+  <View style={[styles.faceGuide, compact && styles.faceGuideCompact]}>
+    <Text style={styles.faceGuideTitle}>{title}</Text>
+    <View style={styles.faceFrame}>
+      <View style={styles.faceFrameOval} />
+      <View style={styles.faceFrameEyeLeft} />
+      <View style={styles.faceFrameEyeRight} />
+      <View style={styles.faceFrameChin} />
+    </View>
+    <Text style={styles.faceGuideText}>Keep your head centered and face straight to the camera.</Text>
+    <Text style={styles.faceGuideHint}>Eyes level, forehead and chin inside frame, no mask, no tilt, good light.</Text>
   </View>
 )
 
@@ -276,6 +302,63 @@ const styles = StyleSheet.create({
   blockContent: { flex: 1 },
   blockTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.fraud, marginBottom: 4 },
   blockMessage: { fontSize: FontSize.sm, color: Colors.fraud, opacity: 0.8, lineHeight: 20 },
+  faceGuide: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    gap: 8,
+  },
+  faceGuideCompact: { padding: 12 },
+  faceGuideTitle: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
+  faceGuideText: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  faceGuideHint: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 18 },
+  faceFrame: {
+    alignSelf: 'center',
+    width: 116,
+    height: 136,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.safeBorder,
+    backgroundColor: Colors.safeBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  faceFrameOval: {
+    width: 70,
+    height: 92,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: Colors.safe,
+  },
+  faceFrameEyeLeft: {
+    position: 'absolute',
+    top: 47,
+    left: 38,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.safe,
+  },
+  faceFrameEyeRight: {
+    position: 'absolute',
+    top: 47,
+    right: 38,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.safe,
+  },
+  faceFrameChin: {
+    position: 'absolute',
+    bottom: 30,
+    width: 30,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.safe,
+  },
   flagItem: { flexDirection: 'row', gap: 10, borderRadius: Radius.md, borderWidth: 1, padding: 10, marginBottom: 6 },
   flagIcon: { fontSize: 16 },
   flagContent: { flex: 1 },

@@ -3,7 +3,7 @@ import { useAttendanceStore } from '../store/attendanceStore'
 import { useGeofenceStore } from '../store/geofenceStore'
 import { useAuthStore } from '../store/authStore'
 import { getLocation, getDeviceInfo } from '../utils/gps'
-import { enrollMyFace } from '../api/services'
+import { enrollMyFace, getMyFaceProfiles, verifyMyFace } from '../api/services'
 import { FraudBadge, FraudScore, FraudFlagList } from '../components/FraudComponents'
 import FaceCapture from '../components/FaceCapture'
 
@@ -25,11 +25,28 @@ const CheckInPage = () => {
   const [zoneStatus, setZoneStatus] = useState(null) // ZoneCheckResult
   const [zoneChecking, setZoneChecking] = useState(false)
   const [faceEnrollLoading, setFaceEnrollLoading] = useState(false)
+  const [hasFaceProfile, setHasFaceProfile] = useState(false)
+  const [verifyingFace, setVerifyingFace] = useState(false)
+  const [faceVerified, setFaceVerified] = useState(false)
 
   useEffect(() => {
     fetchHistory()
     fetchActiveZones()
+    loadFaceStatus()
   }, [])
+
+  const loadFaceStatus = async () => {
+    try {
+      const res = await getMyFaceProfiles()
+      const profiles = res.data?.profiles || []
+      const hasActiveProfile = profiles.some((profile) => profile.is_active)
+      setHasFaceProfile(hasActiveProfile)
+      if (!hasActiveProfile) setFaceVerified(false)
+    } catch {
+      setHasFaceProfile(false)
+      setFaceVerified(false)
+    }
+  }
 
   // When location changes, run geofence pre-check
   useEffect(() => {
@@ -70,6 +87,10 @@ const CheckInPage = () => {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture your face after GPS is inside the attendance zone.' })
       return
     }
+    if (!hasFaceProfile || !faceVerified) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'The active account must pass face verification before check-in can continue.' })
+      return
+    }
 
     const deviceInfo = getDeviceInfo()
     const payload = {
@@ -98,6 +119,10 @@ const CheckInPage = () => {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Capture your face after GPS is inside the attendance zone.' })
       return
     }
+    if (!hasFaceProfile || !faceVerified) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'The active account must pass face verification before check-out can continue.' })
+      return
+    }
 
     const deviceInfo = getDeviceInfo()
     const payload = {
@@ -119,6 +144,7 @@ const CheckInPage = () => {
   const isCheckedIn = !!currentAttendance
   const isBlocked = (isAdmin && isMockGps) || (zoneStatus && !zoneStatus.inside_any_zone)
   const canCaptureFace = !!location && !gpsLoading && !!zoneStatus?.inside_any_zone && !(isAdmin && isMockGps)
+  const canSubmitAttendance = hasFaceProfile && faceVerified && !verifyingFace && !isBlocked
 
   const handleEnrollMyFace = async () => {
     if (!faceImage) {
@@ -129,10 +155,36 @@ const CheckInPage = () => {
     setBlockInfo(null)
     try {
       await enrollMyFace(faceImage)
+      await loadFaceStatus()
+      setFaceVerified(false)
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Face profile saved. Capture again and verify the same account to enable attendance.' })
     } catch (err) {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Face enrollment failed.' })
     } finally {
       setFaceEnrollLoading(false)
+    }
+  }
+
+  const handleCaptureFace = async (sample) => {
+    setFaceImage(sample)
+    if (!sample) {
+      setFaceVerified(false)
+      return
+    }
+    setVerifyingFace(true)
+    setFaceVerified(false)
+    try {
+      const res = await verifyMyFace(sample)
+      if (res.data?.verified) {
+        setFaceVerified(true)
+        setBlockInfo(null)
+      } else {
+        setBlockInfo({ code: 'FACE_MISMATCH', reason: res.data?.message || 'Face does not match the enrolled profile for this account.' })
+      }
+    } catch (err) {
+      setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Enroll face recognition for this account first.' })
+    } finally {
+      setVerifyingFace(false)
     }
   }
 
@@ -267,7 +319,22 @@ const CheckInPage = () => {
         </div>}
       </div>
 
-      <FaceCapture value={faceImage} onCapture={setFaceImage} disabled={!canCaptureFace} />
+      <FaceCapture value={faceImage} onCapture={handleCaptureFace} disabled={!canCaptureFace || verifyingFace} />
+      <div className={`card p-4 border ${hasFaceProfile ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/10'}`}>
+        <div className="text-xs font-mono uppercase tracking-wider text-slate-500">Face Verification Status</div>
+        <div className={`mt-2 text-sm font-semibold ${hasFaceProfile && faceVerified ? 'text-emerald-400' : 'text-amber-300'}`}>
+          {!hasFaceProfile
+            ? 'This account has no active face profile yet. Capture a sample, then enroll it first.'
+            : verifyingFace
+            ? 'Verifying face sample...'
+            : faceVerified
+            ? 'Face matches the enrolled profile for this account.'
+            : 'Capture your face and wait for verification before attendance is enabled.'}
+        </div>
+        <div className="mt-1 text-xs text-slate-400">
+          Each account, including admin, must enroll its own face profile first. Check-in and check-out stay disabled until the captured face matches that account.
+        </div>
+      </div>
       {faceImage && (
         <button onClick={handleEnrollMyFace} disabled={faceEnrollLoading} className="btn-secondary w-full text-sm disabled:opacity-50">
           {faceEnrollLoading ? 'Saving face profile...' : 'Enroll / Replace My Face Profile'}
@@ -300,7 +367,7 @@ const CheckInPage = () => {
       {/* Main action button */}
       <button
         onClick={isCheckedIn ? handleCheckOut : handleCheckIn}
-        disabled={loading || gpsLoading || !location || isBlocked || !faceImage}
+        disabled={loading || gpsLoading || !location || !faceImage || !canSubmitAttendance}
         className={`w-full py-4 rounded-2xl font-display font-bold text-lg transition-all duration-200 active:scale-[0.98] ${
           isBlocked
             ? 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'

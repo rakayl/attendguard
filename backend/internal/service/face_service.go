@@ -1,10 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"math"
+	"math/bits"
 	"strings"
 	"time"
 
@@ -12,7 +19,7 @@ import (
 	"attendance-system/internal/repository"
 )
 
-const faceMatchThreshold = 0.35
+const faceMatchThreshold = 0.82
 
 type EnrollFaceRequest struct {
 	UserID    uint   `json:"user_id"`
@@ -85,12 +92,12 @@ func (s *faceRecognitionService) Verify(userID uint, faceImage string) (*FaceVer
 	if err != nil {
 		return nil, errors.New("active face profile not found")
 	}
-	_, quality, err := buildFaceTemplate(faceImage)
+	template, quality, err := buildFaceTemplate(faceImage)
 	if err != nil {
 		return nil, err
 	}
-	score := 0.9 + (quality * 0.1)
-	verified := quality >= faceMatchThreshold
+	score := templateSimilarity(profile.TemplateHash, template)
+	verified := quality >= 0.35 && score >= faceMatchThreshold
 	if verified {
 		now := time.Now()
 		profile.LastVerifiedAt = &now
@@ -143,10 +150,14 @@ func buildFaceTemplate(faceImage string) (string, float64, error) {
 		return "", 0, errors.New("face image sample is too small")
 	}
 	if idx := strings.Index(normalized, ","); strings.HasPrefix(normalized, "data:") && idx >= 0 {
-		normalized = normalized[idx+1:]
+		meta := normalized[:idx]
+		payload := normalized[idx+1:]
+		if strings.Contains(strings.ToLower(meta), "image/") {
+			return buildImageFaceTemplate(payload)
+		}
+		normalized = payload
 	}
-	// Quantize the sample before hashing so repeated captures from the same
-	// face frame can still match in demo/local deployments.
+
 	const bucket = 256
 	chunks := make([]byte, 0, len(normalized)/bucket+1)
 	for i := 0; i < len(normalized); i += bucket {
@@ -172,6 +183,18 @@ func templateSimilarity(a, b string) float64 {
 	if a == b {
 		return 1
 	}
+	if len(a) == 16 && len(b) == 16 {
+		left, errA := hex.DecodeString(a)
+		right, errB := hex.DecodeString(b)
+		if errA == nil && errB == nil && len(left) == len(right) {
+			var diff int
+			for i := range left {
+				diff += bits.OnesCount8(left[i] ^ right[i])
+			}
+			totalBits := len(left) * 8
+			return 1 - (float64(diff) / float64(totalBits))
+		}
+	}
 	minLen := len(a)
 	if len(b) < minLen {
 		minLen = len(b)
@@ -183,4 +206,73 @@ func templateSimilarity(a, b string) float64 {
 		}
 	}
 	return float64(matches) / float64(len(a))
+}
+
+func buildImageFaceTemplate(payload string) (string, float64, error) {
+	raw, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return "", 0, errors.New("invalid face image encoding")
+	}
+	img, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return buildTextFaceTemplate(payload)
+	}
+
+	const size = 8
+	var grayscale [size * size]uint8
+	var total uint64
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width == 0 || height == 0 {
+		return "", 0, errors.New("face image is empty")
+	}
+
+	for y := 0; y < size; y++ {
+		srcY := bounds.Min.Y + (y*height)/size
+		for x := 0; x < size; x++ {
+			srcX := bounds.Min.X + (x*width)/size
+			r, g, b, _ := img.At(srcX, srcY).RGBA()
+			gray := uint8((((r >> 8) * 299) + ((g >> 8) * 587) + ((b >> 8) * 114)) / 1000)
+			grayscale[y*size+x] = gray
+			total += uint64(gray)
+		}
+	}
+
+	avg := uint8(total / uint64(size*size))
+	buf := make([]byte, 8)
+	for i, gray := range grayscale {
+		if gray >= avg {
+			buf[i/8] |= 1 << uint(7-(i%8))
+		}
+	}
+
+	var variance float64
+	for _, gray := range grayscale {
+		diff := float64(gray) - float64(avg)
+		variance += diff * diff
+	}
+	variance /= float64(size * size)
+	quality := math.Min(1, (float64(len(raw))/6000)+(variance/5000))
+
+	return hex.EncodeToString(buf), quality, nil
+}
+
+func buildTextFaceTemplate(sample string) (string, float64, error) {
+	const bucket = 256
+	chunks := make([]byte, 0, len(sample)/bucket+1)
+	for i := 0; i < len(sample); i += bucket {
+		end := i + bucket
+		if end > len(sample) {
+			end = len(sample)
+		}
+		var sum int
+		for _, b := range []byte(sample[i:end]) {
+			sum += int(b)
+		}
+		chunks = append(chunks, byte(sum%251))
+	}
+	hash := sha256.Sum256(chunks)
+	quality := math.Min(1, float64(len(sample))/6000)
+	return hex.EncodeToString(hash[:]), quality, nil
 }
