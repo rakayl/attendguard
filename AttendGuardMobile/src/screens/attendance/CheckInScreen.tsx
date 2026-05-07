@@ -43,6 +43,7 @@ export const CheckInScreen = () => {
   const [hasFaceProfile, setHasFaceProfile] = useState(false)
   const [verifyingFace, setVerifyingFace] = useState(false)
   const [faceVerified, setFaceVerified] = useState(false)
+  const [faceAnalysis, setFaceAnalysis] = useState<any | null>(null)
 
   const isCheckedIn = !!currentAttendance
   const adminTestingFakeGps = isAdmin() && simulateFakeGps
@@ -74,10 +75,12 @@ export const CheckInScreen = () => {
       setHasFaceProfile(hasActiveProfile)
       if (!hasActiveProfile) {
         setFaceVerified(false)
+        setFaceAnalysis(null)
       }
     } catch {
       setHasFaceProfile(false)
       setFaceVerified(false)
+      setFaceAnalysis(null)
     }
   }
 
@@ -140,6 +143,8 @@ export const CheckInScreen = () => {
     if (res.success) {
       setResult(res.data)
       setFaceImage('')
+      setFaceVerified(false)
+      setFaceAnalysis(null)
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code!, reason: res.error! })
@@ -179,6 +184,8 @@ export const CheckInScreen = () => {
     if (res.success) {
       setResult(res.data)
       setFaceImage('')
+      setFaceVerified(false)
+      setFaceAnalysis(null)
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code!, reason: res.error! })
@@ -195,6 +202,7 @@ export const CheckInScreen = () => {
     setFaceImage(sample)
     try {
       const res = await faceAPI.verifyMe(sample)
+      setFaceAnalysis(res.data?.analysis || res.data?.result?.analysis || null)
       if (res.data?.verified) {
         setFaceVerified(true)
         setBlockInfo(null)
@@ -203,6 +211,7 @@ export const CheckInScreen = () => {
       }
     } catch (err: any) {
       setFaceVerified(false)
+      setFaceAnalysis(err.response?.data?.analysis || err.response?.data?.result?.analysis || null)
       setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Enroll face recognition for this account first.' })
     } finally {
       setVerifyingFace(false)
@@ -378,6 +387,22 @@ export const CheckInScreen = () => {
 
         <FacePositionGuide title={isCheckedIn ? 'Check-Out Position' : 'Check-In Position'} compact />
 
+        {faceAnalysis && (
+          <View style={[styles.faceStatusCard, faceAnalysis.passed ? styles.faceAiPassCard : styles.faceAiFailCard]}>
+            <Text style={[styles.faceStatusTitle, faceAnalysis.passed ? styles.faceAiPassTitle : styles.faceAiFailTitle]}>
+              AI Face Analysis: {faceAnalysis.passed ? 'Passed' : 'Needs Better Capture'}
+            </Text>
+            <Text style={styles.faceStatusText}>
+              Engine {faceAnalysis.engine} • score {(faceAnalysis.overall_score * 100).toFixed(0)}% • frontal {faceAnalysis.frontal ? 'yes' : 'no'}
+            </Text>
+            {!!faceAnalysis.guidance?.length && (
+              <Text style={styles.faceStatusText}>
+                {faceAnalysis.guidance.join(' ')}
+              </Text>
+            )}
+          </View>
+        )}
+
         {!hasFaceProfile && (
           <View style={styles.faceStatusCard}>
             <Text style={styles.faceStatusTitle}>Face profile belum terdaftar</Text>
@@ -486,7 +511,11 @@ const styles = StyleSheet.create({
   faceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, backgroundColor: Colors.bgCard, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md },
   faceCardReady: { backgroundColor: Colors.safeBg, borderColor: Colors.safeBorder },
   faceStatusCard: { backgroundColor: Colors.suspiciousBg, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.suspiciousBorder, padding: Spacing.md },
+  faceAiPassCard: { backgroundColor: Colors.safeBg, borderColor: Colors.safeBorder },
+  faceAiFailCard: { backgroundColor: Colors.fraudBg, borderColor: Colors.fraudBorder },
   faceStatusTitle: { fontSize: FontSize.sm, color: Colors.suspicious, fontWeight: FontWeight.semibold, marginBottom: 4 },
+  faceAiPassTitle: { color: Colors.safe },
+  faceAiFailTitle: { color: Colors.fraud },
   faceStatusText: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
   toggleLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   toggleSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },

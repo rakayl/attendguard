@@ -1,379 +1,584 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useActivityStore } from '../store/activityStore'
 import { useAuthStore } from '../store/authStore'
 import { useRbacStore } from '../store/rbacStore'
 
-const STATUS_STYLES = {
-  planned: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/20',
-  ongoing: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
-  done: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+const ACTIVITY_STATUS_STYLES = {
+  pending: 'text-slate-300 bg-slate-800 border-slate-700',
+  in_progress: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+  completed: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+  cancelled: 'text-rose-300 bg-rose-500/10 border-rose-500/20',
 }
 
-const initialForm = {
+const TASK_STATUS_STYLES = {
+  pending: 'text-slate-300 bg-slate-800 border-slate-700',
+  progress: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/20',
+  done: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+  cancelled: 'text-rose-300 bg-rose-500/10 border-rose-500/20',
+}
+
+const PRIORITY_STYLES = {
+  low: 'text-slate-300 bg-slate-800 border-slate-700',
+  medium: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+  high: 'text-rose-300 bg-rose-500/10 border-rose-500/20',
+}
+
+const activityFormDefaults = {
   title: '',
   description: '',
-  activity_date: '',
-  start_time: '09:00',
-  end_time: '10:00',
-  status: 'planned',
-  progress: 0,
-  allow_overlap: false,
-  version: null,
+  assigned_to: '',
+  activity_date: new Date().toLocaleDateString('en-CA'),
 }
 
-const toTodayInput = () => new Date().toLocaleDateString('en-CA')
+const taskFormDefaults = {
+  title: '',
+  description: '',
+  priority: 'medium',
+  status: 'pending',
+  due_time: '',
+}
 
-const ActivityModal = ({ item, onClose, onSave, saving }) => {
-  const isEdit = !!item
+const ModalShell = ({ title, subtitle, onClose, children }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className="card w-full max-w-2xl animate-slide-up">
+      <div className="flex items-start justify-between border-b border-slate-800 px-6 py-5">
+        <div>
+          <h2 className="font-display text-xl font-bold text-white">{title}</h2>
+          {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
+        </div>
+        <button onClick={onClose} className="text-2xl leading-none text-slate-500 hover:text-slate-300">x</button>
+      </div>
+      {children}
+    </div>
+  </div>
+)
+
+const ActivityModal = ({ users, item, onClose, onSave, saving }) => {
   const [form, setForm] = useState(item ? {
     title: item.title,
     description: item.description || '',
+    assigned_to: String(item.assigned_to),
     activity_date: item.activity_date,
-    start_time: item.start_time,
-    end_time: item.end_time,
-    status: item.status,
-    progress: item.progress,
-    allow_overlap: false,
-    version: item.version,
-  } : { ...initialForm, activity_date: toTodayInput() })
+  } : activityFormDefaults)
   const [error, setError] = useState('')
 
   const submit = async (e) => {
     e.preventDefault()
     setError('')
     try {
-      await onSave(form)
+      await onSave({ ...form, assigned_to: Number(form.assigned_to) })
       onClose()
     } catch (err) {
-      setError(err.message || 'Failed to save activity')
+      setError(err.message || 'Failed to save daily activity')
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/65 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="card w-full max-w-2xl animate-slide-up">
-        <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
-          <div>
-            <h2 className="font-display font-bold text-white">{isEdit ? 'Update Activity' : 'New Daily Activity'}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Shared team agenda for today and upcoming plans.</p>
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-2xl leading-none">x</button>
+    <ModalShell
+      title={item ? 'Update Daily Activity' : 'Create Daily Activity'}
+      subtitle="One activity can contain many tasks and a full audit trail."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-4 px-6 py-5">
+        {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
+        <div>
+          <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Title</label>
+          <input className="input-field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         </div>
-
-        <form onSubmit={submit} className="px-6 py-5 space-y-4">
-          {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
-
+        <div>
+          <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Description</label>
+          <textarea className="input-field min-h-28 resize-y" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Title *</label>
-            <input className="input-field" value={form.title} maxLength={120} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Assigned User</label>
+            <select className="input-field" value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })} required>
+              <option value="">Select user...</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>{user.name} - {user.email}</option>
+              ))}
+            </select>
           </div>
-
           <div>
-            <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Description</label>
-            <textarea className="input-field min-h-28 resize-y" value={form.description} maxLength={2000} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Activity Date</label>
+            <input type="date" className="input-field" value={form.activity_date} onChange={(e) => setForm({ ...form, activity_date: e.target.value })} required />
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Date *</label>
-              <input type="date" className="input-field" value={form.activity_date} onChange={(e) => setForm({ ...form, activity_date: e.target.value })} required />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Start *</label>
-              <input type="time" className="input-field" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} required />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">End *</label>
-              <input type="time" className="input-field" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} required />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Status *</label>
-              <select className="input-field" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                <option value="planned">Planned</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="done">Done</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
-            <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase">Progress</label>
-              <input type="range" min="0" max="100" value={form.progress} onChange={(e) => setForm({ ...form, progress: Number(e.target.value) })} className="w-full accent-cyan-500" />
-              <div className="text-xs text-slate-500 mt-1">{form.progress}% complete</div>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-300 pt-5">
-              <input type="checkbox" checked={form.allow_overlap} onChange={(e) => setForm({ ...form, allow_overlap: e.target.checked })} className="accent-cyan-500" />
-              Allow overlap
-            </label>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Activity'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : item ? 'Save Changes' : 'Create Activity'}</button>
+        </div>
+      </form>
+    </ModalShell>
   )
 }
+
+const TaskModal = ({ item, onClose, onSave, saving }) => {
+  const [form, setForm] = useState(item ? {
+    title: item.title,
+    description: item.description || '',
+    priority: item.priority,
+    status: item.status,
+    due_time: item.due_time ? item.due_time.slice(0, 16) : '',
+  } : taskFormDefaults)
+  const [error, setError] = useState('')
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setError('')
+    try {
+      await onSave({ ...form, due_time: form.due_time || '' })
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Failed to save task')
+    }
+  }
+
+  return (
+    <ModalShell
+      title={item ? 'Update Task' : 'Create Task'}
+      subtitle="Creator can edit all fields. Assigned user can update task status."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-4 px-6 py-5">
+        {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
+        <div>
+          <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Task Title</label>
+          <input className="input-field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Description</label>
+          <textarea className="input-field min-h-24 resize-y" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Priority</label>
+            <select className="input-field" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Status</label>
+            <select className="input-field" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="pending">Pending</option>
+              <option value="progress">Progress</option>
+              <option value="done">Done</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-mono uppercase text-slate-500">Due Time</label>
+            <input type="datetime-local" className="input-field" value={form.due_time} onChange={(e) => setForm({ ...form, due_time: e.target.value })} />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : item ? 'Save Task' : 'Create Task'}</button>
+        </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+const StatusBadge = ({ value, type = 'activity' }) => {
+  const styles = type === 'activity' ? ACTIVITY_STATUS_STYLES : TASK_STATUS_STYLES
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-mono ${styles[value] || styles.pending}`}>{value}</span>
+}
+
+const PriorityBadge = ({ value }) => (
+  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-mono uppercase ${PRIORITY_STYLES[value] || PRIORITY_STYLES.medium}`}>{value}</span>
+)
 
 const DailyActivityPage = () => {
   const { user, can } = useAuthStore()
   const { users, fetchUsers } = useRbacStore()
   const {
     activities,
+    selectedActivity,
+    logs,
     filters,
     loading,
     saving,
     error,
     setFilters,
     fetchActivities,
+    fetchActivityDetail,
     createActivity,
     updateActivity,
     deleteActivity,
+    createTask,
+    updateTask,
+    updateTaskStatus,
+    deleteTask,
   } = useActivityStore()
 
-  const [modal, setModal] = useState(null)
-  const [selected, setSelected] = useState(null)
+  const [activityModal, setActivityModal] = useState(null)
+  const [taskModal, setTaskModal] = useState(null)
+
+  const canCreateActivity = can('activity:create')
+  const canUpdateActivity = can('activity:update')
+  const canDeleteActivity = can('activity:delete')
+  const canUpdateTaskStatus = can('activity:task_update')
 
   useEffect(() => {
     fetchUsers()
     fetchActivities({ date_preset: 'today' })
   }, [])
 
-  const applyPreset = (preset) => {
-    const next = {
-      date_preset: preset,
-      date_from: preset === 'range' ? filters.date_from || toTodayInput() : '',
-      date_to: preset === 'range' ? filters.date_to || toTodayInput() : '',
-    }
-    setFilters(next)
-    fetchActivities({ ...filters, ...next })
+  const summary = useMemo(() => ({
+    total: activities.length,
+    completed: activities.filter((item) => item.status === 'completed').length,
+    inProgress: activities.filter((item) => item.status === 'in_progress').length,
+    tasks: activities.reduce((sum, item) => sum + (item.task_count || 0), 0),
+  }), [activities])
+
+  const selectActivity = async (id) => {
+    await fetchActivityDetail(id)
   }
 
-  const applyUserFilter = (userId) => {
-    setFilters({ user_id: userId })
-    fetchActivities({ ...filters, user_id: userId })
-  }
-
-  const applyRange = (patch) => {
-    const next = { ...filters, ...patch, date_preset: 'range' }
-    setFilters(next)
-  }
-
-  const refreshRange = () => {
-    fetchActivities({ ...filters, date_preset: 'range' })
-  }
-
-  const submit = async (payload) => {
-    if (modal?.id) {
-      await updateActivity(modal.id, payload)
+  const submitActivity = async (payload) => {
+    if (activityModal?.id) {
+      await updateActivity(activityModal.id, payload)
     } else {
       await createActivity(payload)
     }
   }
 
-  const remove = async (item) => {
-    if (!window.confirm(`Delete activity "${item.title}"?`)) return
-    await deleteActivity(item.id)
-    if (selected?.id === item.id) setSelected(null)
+  const submitTask = async (payload) => {
+    if (!selectedActivity) return
+    if (taskModal?.id) {
+      await updateTask(taskModal.id, payload)
+    } else {
+      await createTask(selectedActivity.id, payload)
+    }
   }
 
-  const totalToday = activities.filter((item) => item.is_today).length
-  const ownItems = activities.filter((item) => item.user_id === user?.id).length
+  const applyPreset = (preset) => {
+    const next = {
+      date_preset: preset,
+      date_from: preset === 'range' ? filters.date_from || new Date().toLocaleDateString('en-CA') : '',
+      date_to: preset === 'range' ? filters.date_to || new Date().toLocaleDateString('en-CA') : '',
+    }
+    setFilters(next)
+    fetchActivities({ ...filters, ...next })
+  }
+
+  const applyAssignedUser = (value) => {
+    const next = { assigned_user: value }
+    setFilters(next)
+    fetchActivities({ ...filters, ...next })
+  }
+
+  const applyStatus = (value) => {
+    const next = { status: value }
+    setFilters(next)
+    fetchActivities({ ...filters, ...next })
+  }
+
+  const refreshRange = () => fetchActivities({ ...filters, date_preset: 'range' })
+
+  const handleDeleteActivity = async (activity) => {
+    if (!window.confirm(`Delete daily activity "${activity.title}"?`)) return
+    await deleteActivity(activity.id)
+  }
+
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Delete task "${task.title}"?`)) return
+    await deleteTask(task.id)
+  }
+
+  const handleStatusQuickUpdate = async (task, status) => {
+    await updateTaskStatus(task.id, status)
+  }
+
+  const canManageSelectedActivity = selectedActivity && (user?.id === selectedActivity.created_by || user?.role?.name === 'admin')
+  const canUpdateSelectedTaskStatus = selectedActivity && (user?.id === selectedActivity.created_by || user?.id === selectedActivity.assigned_to || user?.role?.name === 'admin')
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 animate-slide-up">
-      {modal && (
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8 animate-slide-up">
+      {activityModal && (
         <ActivityModal
-          item={modal === 'create' ? null : modal}
-          onClose={() => setModal(null)}
-          onSave={submit}
+          users={users}
+          item={activityModal === 'create' ? null : activityModal}
+          onClose={() => setActivityModal(null)}
+          onSave={submitActivity}
           saving={saving}
         />
       )}
 
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      {taskModal && (
+        <TaskModal
+          item={taskModal === 'create' ? null : taskModal}
+          onClose={() => setTaskModal(null)}
+          onSave={submitTask}
+          saving={saving}
+        />
+      )}
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-white">Daily Activity</h1>
-          <p className="text-slate-500 text-sm mt-1">Shared team agenda for past, current, and future work plans.</p>
+          <p className="mt-1 text-sm text-slate-500">Task-based daily workboard with audit trail, ownership rules, and live status updates.</p>
         </div>
-        {can('activity:create') && <button onClick={() => setModal('create')} className="btn-primary text-sm">+ New Activity</button>}
+        {canCreateActivity && (
+          <button onClick={() => setActivityModal('create')} className="btn-primary text-sm">+ New Activity</button>
+        )}
       </div>
 
-      {error && <div className="card p-4 border-red-500/20 bg-red-500/10 text-sm text-red-400">{error}</div>}
+      {error && <div className="card border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ['Visible Items', activities.length, 'text-cyan-300'],
-          ['Today', totalToday, 'text-amber-300'],
-          ['Mine', ownItems, 'text-emerald-300'],
-          ['People', new Set(activities.map((item) => item.user_id)).size, 'text-rose-300'],
+          ['Activities', summary.total, 'text-cyan-300'],
+          ['In Progress', summary.inProgress, 'text-amber-300'],
+          ['Completed', summary.completed, 'text-emerald-300'],
+          ['Tasks', summary.tasks, 'text-rose-300'],
         ].map(([label, value, color]) => (
           <div key={label} className="card p-4">
-            <div className={`text-2xl font-display font-bold ${color}`}>{value}</div>
-            <div className="text-xs text-slate-500 font-mono uppercase mt-1">{label}</div>
+            <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
+            <div className="mt-1 text-xs font-mono uppercase text-slate-500">{label}</div>
           </div>
         ))}
       </div>
 
-      <div className="card p-5 space-y-4">
-        <div className="flex flex-col xl:flex-row xl:items-end gap-4">
-          <div className="flex flex-wrap gap-2">
-            {[
-              ['today', 'Today'],
-              ['tomorrow', 'Tomorrow'],
-              ['week', 'Next 7 Days'],
-              ['range', 'Custom Range'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => applyPreset(value)}
-                className={`px-4 py-2 rounded-xl text-xs font-mono border transition-all ${
-                  filters.date_preset === value
-                    ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      <div className="card space-y-4 p-5">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ['today', 'Today'],
+            ['tomorrow', 'Tomorrow'],
+            ['week', 'Next 7 Days'],
+            ['range', 'Custom Range'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => applyPreset(value)}
+              className={`rounded-xl border px-4 py-2 text-xs font-mono transition-all ${
+                filters.date_preset === value
+                  ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300'
+                  : 'border-slate-700 bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 xl:ml-auto">
-            <select className="input-field w-full sm:w-60" value={filters.user_id} onChange={(e) => applyUserFilter(e.target.value)}>
-              <option value="">All users</option>
-              {users.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            {filters.date_preset === 'range' && (
-              <>
-                <input type="date" className="input-field" value={filters.date_from} onChange={(e) => applyRange({ date_from: e.target.value })} />
-                <input type="date" className="input-field" value={filters.date_to} onChange={(e) => applyRange({ date_to: e.target.value })} />
-                <button onClick={refreshRange} className="btn-secondary text-sm">Apply</button>
-              </>
-            )}
-          </div>
+        <div className="grid gap-3 xl:grid-cols-[1fr_220px_220px_auto]">
+          <select className="input-field" value={filters.assigned_user} onChange={(e) => applyAssignedUser(e.target.value)}>
+            <option value="">All assigned users</option>
+            {users.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.name}</option>
+            ))}
+          </select>
+
+          <select className="input-field" value={filters.status} onChange={(e) => applyStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+
+          {filters.date_preset === 'range' ? (
+            <>
+              <input type="date" className="input-field" value={filters.date_from} onChange={(e) => setFilters({ date_from: e.target.value, date_preset: 'range' })} />
+              <input type="date" className="input-field" value={filters.date_to} onChange={(e) => setFilters({ date_to: e.target.value, date_preset: 'range' })} />
+              <button onClick={refreshRange} className="btn-secondary text-sm">Apply</button>
+            </>
+          ) : (
+            <button onClick={() => fetchActivities()} className="btn-secondary text-sm xl:justify-self-end">Refresh</button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <div className="card overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
             <div>
-              <div className="font-display font-semibold text-white">Team Timeline</div>
-              <div className="text-xs text-slate-500">Sorted by date and time ascending</div>
+              <div className="font-display text-lg font-semibold text-white">Daily Activity List</div>
+              <div className="text-xs text-slate-500">Click one row to open task management and audit timeline.</div>
             </div>
-            <button onClick={() => fetchActivities()} className="btn-secondary text-sm">Refresh</button>
+            {loading && <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />}
           </div>
 
-          {loading ? (
-            <div className="p-16 flex justify-center">
-              <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : activities.length === 0 ? (
-            <div className="p-16 text-center text-sm text-slate-500">No activities found for the selected filter.</div>
+          {activities.length === 0 && !loading ? (
+            <div className="p-12 text-center text-sm text-slate-500">No daily activities found for the selected filter.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-950/70">
-                  <tr className="text-left text-xs font-mono uppercase tracking-wider text-slate-500">
-                    <th className="px-5 py-3">Date</th>
-                    <th className="px-5 py-3">Time</th>
-                    <th className="px-5 py-3">User</th>
-                    <th className="px-5 py-3">Activity</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Progress</th>
-                    <th className="px-5 py-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((item) => {
-                    const isMine = item.user_id === user?.id
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => setSelected(item)}
-                        className={`border-t border-slate-800 cursor-pointer transition-colors hover:bg-slate-900/70 ${item.is_today ? 'bg-cyan-500/5' : ''} ${selected?.id === item.id ? 'bg-slate-900' : ''}`}
-                      >
-                        <td className="px-5 py-4 align-top">
-                          <div className="text-slate-200 font-medium">{item.activity_date}</div>
-                          {item.is_today && <div className="text-[10px] text-cyan-300 font-mono mt-1">TODAY</div>}
-                        </td>
-                        <td className="px-5 py-4 align-top font-mono text-slate-300">{item.start_time} - {item.end_time}</td>
-                        <td className="px-5 py-4 align-top">
-                          <div className="text-slate-200">{item.user.name}</div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-1">{item.user.display_role || item.user.email}</div>
-                        </td>
-                        <td className="px-5 py-4 align-top">
-                          <div className="text-slate-100 font-medium">{item.title}</div>
-                          <div className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description || 'No description'}</div>
-                        </td>
-                        <td className="px-5 py-4 align-top">
-                          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-mono border ${STATUS_STYLES[item.status] || STATUS_STYLES.planned}`}>{item.status}</span>
-                        </td>
-                        <td className="px-5 py-4 align-top">
-                          <div className="w-24 h-2 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-cyan-400" style={{ width: `${item.progress}%` }} />
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-1">{item.progress}%</div>
-                        </td>
-                        <td className="px-5 py-4 align-top text-right">
-                          {isMine ? (
-                            <div className="flex justify-end gap-2">
-                              <button onClick={(e) => { e.stopPropagation(); setModal(item) }} className="btn-secondary text-xs px-3 py-1.5">Edit</button>
-                              <button onClick={(e) => { e.stopPropagation(); remove(item) }} className="btn-danger text-xs px-3 py-1.5">Delete</button>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-slate-600 font-mono">Shared</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-800">
+              {activities.map((activity) => (
+                <button
+                  key={activity.id}
+                  onClick={() => selectActivity(activity.id)}
+                  className={`w-full px-5 py-4 text-left transition-colors hover:bg-slate-900/70 ${selectedActivity?.id === activity.id ? 'bg-slate-900' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-semibold text-slate-100">{activity.title}</div>
+                        <StatusBadge value={activity.status} />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                        <span>{activity.activity_date}</span>
+                        <span>Assigned: {activity.assigned_user?.name}</span>
+                        <span>Creator: {activity.creator?.name}</span>
+                      </div>
+                      <div className="mt-2 line-clamp-2 text-sm text-slate-400">{activity.description || 'No description provided.'}</div>
+                    </div>
+                    <div className="w-36 flex-shrink-0">
+                      <div className="mb-2 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                        <span>{activity.completed_task_count}/{activity.task_count} tasks</span>
+                        <span>{activity.progress_percentage}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                        <div className="h-full bg-cyan-400" style={{ width: `${activity.progress_percentage}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="card p-5">
-            <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-3">Selected Activity</div>
-            {selected ? (
-              <div className="space-y-3">
-                <div>
-                  <div className="text-lg font-display font-semibold text-white">{selected.title}</div>
-                  <div className="text-xs text-slate-500 mt-1">{selected.activity_date} • {selected.start_time} - {selected.end_time}</div>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-mono uppercase tracking-wider text-slate-500">Daily Activity Detail</div>
+                <div className="mt-1 font-display text-lg font-semibold text-white">{selectedActivity?.title || 'Select an activity'}</div>
+              </div>
+              {selectedActivity && canManageSelectedActivity && canUpdateActivity && (
+                <div className="flex gap-2">
+                  <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => setActivityModal(selectedActivity)}>Edit</button>
+                  {canDeleteActivity && <button className="btn-danger text-xs px-3 py-1.5" onClick={() => handleDeleteActivity(selectedActivity)}>Delete</button>}
                 </div>
-                <div className="text-sm text-slate-300">{selected.description || 'No description provided.'}</div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-mono border ${STATUS_STYLES[selected.status] || STATUS_STYLES.planned}`}>{selected.status}</span>
-                  <span className="text-xs text-slate-500 font-mono">v{selected.version}</span>
+              )}
+            </div>
+
+            {selectedActivity ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge value={selectedActivity.status} />
+                  <span className="text-xs font-mono text-slate-500">{selectedActivity.activity_date}</span>
                 </div>
-                <div className="text-xs text-slate-500 font-mono">Owner: {selected.user.name} ({selected.user.display_role || selected.user.email})</div>
+                <div className="text-sm text-slate-300">{selectedActivity.description || 'No description provided.'}</div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="text-[11px] font-mono uppercase text-slate-500">Assigned User</div>
+                    <div className="mt-1 text-sm font-medium text-slate-200">{selectedActivity.assigned_user?.name}</div>
+                    <div className="text-xs text-slate-500">{selectedActivity.assigned_user?.display_role || selectedActivity.assigned_user?.email}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="text-[11px] font-mono uppercase text-slate-500">Creator</div>
+                    <div className="mt-1 text-sm font-medium text-slate-200">{selectedActivity.creator?.name}</div>
+                    <div className="text-xs text-slate-500">{selectedActivity.creator?.display_role || selectedActivity.creator?.email}</div>
+                  </div>
+                </div>
                 <div>
-                  <div className="text-xs text-slate-500 font-mono mb-1 uppercase">Progress</div>
-                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-emerald-400" style={{ width: `${selected.progress}%` }} />
+                  <div className="mb-2 flex items-center justify-between text-[11px] font-mono uppercase text-slate-500">
+                    <span>Progress Percentage</span>
+                    <span>{selectedActivity.progress_percentage}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-full bg-emerald-400" style={{ width: `${selectedActivity.progress_percentage}%` }} />
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">Pick an activity row to inspect the details.</div>
+              <div className="text-sm text-slate-500">Choose one activity from the list to manage tasks and inspect logs.</div>
             )}
           </div>
 
           <div className="card p-5">
-            <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-3">Rules</div>
-            <div className="space-y-2 text-sm text-slate-400">
-              <div>Everyone can see the shared team timeline.</div>
-              <div>Only the creator can edit or delete an activity.</div>
-              <div>Time overlap is blocked by default for the same user on the same date.</div>
-              <div>Optimistic locking is enabled using the activity version during updates.</div>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-mono uppercase tracking-wider text-slate-500">Task Management</div>
+                <div className="mt-1 text-sm text-slate-400">Creator can edit all tasks. Assigned user can update task status.</div>
+              </div>
+              {selectedActivity && canManageSelectedActivity && canUpdateActivity && (
+                <button className="btn-primary text-xs px-3 py-1.5" onClick={() => setTaskModal('create')}>+ Task</button>
+              )}
             </div>
+
+            {!selectedActivity ? (
+              <div className="text-sm text-slate-500">Select a daily activity first.</div>
+            ) : selectedActivity.tasks?.length ? (
+              <div className="space-y-3">
+                {selectedActivity.tasks.map((task) => (
+                  <div key={task.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium text-slate-100">{task.title}</div>
+                          <StatusBadge value={task.status} type="task" />
+                          <PriorityBadge value={task.priority} />
+                        </div>
+                        <div className="mt-2 text-sm text-slate-400">{task.description || 'No task description.'}</div>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                          {task.due_time && <span>Due: {new Date(task.due_time).toLocaleString()}</span>}
+                          {task.updater?.name && <span>Updated by: {task.updater.name}</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {canUpdateSelectedTaskStatus && canUpdateTaskStatus && (
+                          <>
+                            {task.status === 'pending' && <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => handleStatusQuickUpdate(task, 'progress')}>Start</button>}
+                            {task.status === 'progress' && <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => handleStatusQuickUpdate(task, 'done')}>Done</button>}
+                            {(task.status === 'pending' || task.status === 'progress') && <button className="btn-danger px-3 py-1.5 text-xs" onClick={() => handleStatusQuickUpdate(task, 'cancelled')}>Cancel</button>}
+                          </>
+                        )}
+                        {canManageSelectedActivity && canUpdateActivity && (
+                          <>
+                            <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setTaskModal(task)}>Edit</button>
+                            <button className="btn-danger px-3 py-1.5 text-xs" onClick={() => handleDeleteTask(task)}>Delete</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-500">
+                No tasks yet for this activity.
+              </div>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <div className="mb-4">
+              <div className="text-xs font-mono uppercase tracking-wider text-slate-500">Log Timeline</div>
+              <div className="mt-1 text-sm text-slate-400">Every create, update, delete, and status change is recorded here.</div>
+            </div>
+
+            {!selectedActivity ? (
+              <div className="text-sm text-slate-500">Select a daily activity to inspect its audit trail.</div>
+            ) : logs.length ? (
+              <div className="space-y-4">
+                {logs.map((log) => (
+                  <div key={log.id} className="relative pl-6">
+                    <div className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-cyan-400" />
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-100">{log.description}</div>
+                        <div className="text-[11px] font-mono uppercase text-slate-500">{log.action}</div>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">{log.user?.name} • {new Date(log.created_at).toLocaleString()}</div>
+                      {(log.old_value || log.new_value) && (
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-3 text-[11px] text-slate-400">{log.old_value ? JSON.stringify(log.old_value, null, 2) : 'No previous value'}</pre>
+                          <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-3 text-[11px] text-slate-400">{log.new_value ? JSON.stringify(log.new_value, null, 2) : 'No new value'}</pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-slate-500">No logs recorded yet for this activity.</div>
+            )}
           </div>
         </div>
       </div>

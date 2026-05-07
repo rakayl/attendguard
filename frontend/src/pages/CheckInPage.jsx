@@ -28,6 +28,7 @@ const CheckInPage = () => {
   const [hasFaceProfile, setHasFaceProfile] = useState(false)
   const [verifyingFace, setVerifyingFace] = useState(false)
   const [faceVerified, setFaceVerified] = useState(false)
+  const [faceAnalysis, setFaceAnalysis] = useState(null)
 
   useEffect(() => {
     fetchHistory()
@@ -41,10 +42,14 @@ const CheckInPage = () => {
       const profiles = res.data?.profiles || []
       const hasActiveProfile = profiles.some((profile) => profile.is_active)
       setHasFaceProfile(hasActiveProfile)
-      if (!hasActiveProfile) setFaceVerified(false)
+      if (!hasActiveProfile) {
+        setFaceVerified(false)
+        setFaceAnalysis(null)
+      }
     } catch {
       setHasFaceProfile(false)
       setFaceVerified(false)
+      setFaceAnalysis(null)
     }
   }
 
@@ -103,6 +108,8 @@ const CheckInPage = () => {
     if (res.success) {
       setResult(res.data)
       setFaceImage('')
+      setFaceVerified(false)
+      setFaceAnalysis(null)
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code, reason: res.error })
@@ -135,6 +142,8 @@ const CheckInPage = () => {
     if (res.success) {
       setResult(res.data)
       setFaceImage('')
+      setFaceVerified(false)
+      setFaceAnalysis(null)
       setBlockInfo(null)
     } else if (res.blocked) {
       setBlockInfo({ code: res.code, reason: res.error })
@@ -154,9 +163,10 @@ const CheckInPage = () => {
     setFaceEnrollLoading(true)
     setBlockInfo(null)
     try {
-      await enrollMyFace(faceImage)
+      const res = await enrollMyFace(faceImage)
       await loadFaceStatus()
       setFaceVerified(false)
+      setFaceAnalysis(res.data?.analysis || null)
       setBlockInfo({ code: 'FACE_REQUIRED', reason: 'Face profile saved. Capture again and verify the same account to enable attendance.' })
     } catch (err) {
       setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Face enrollment failed.' })
@@ -175,6 +185,7 @@ const CheckInPage = () => {
     setFaceVerified(false)
     try {
       const res = await verifyMyFace(sample)
+      setFaceAnalysis(res.data?.analysis || res.data?.result?.analysis || null)
       if (res.data?.verified) {
         setFaceVerified(true)
         setBlockInfo(null)
@@ -182,6 +193,7 @@ const CheckInPage = () => {
         setBlockInfo({ code: 'FACE_MISMATCH', reason: res.data?.message || 'Face does not match the enrolled profile for this account.' })
       }
     } catch (err) {
+      setFaceAnalysis(err.response?.data?.analysis || err.response?.data?.result?.analysis || null)
       setBlockInfo({ code: 'FACE_REQUIRED', reason: err.response?.data?.error || 'Enroll face recognition for this account first.' })
     } finally {
       setVerifyingFace(false)
@@ -334,6 +346,17 @@ const CheckInPage = () => {
         <div className="mt-1 text-xs text-slate-400">
           Each account, including admin, must enroll its own face profile first. Check-in and check-out stay disabled until the captured face matches that account.
         </div>
+        {faceAnalysis && (
+          <div className={`mt-3 rounded-xl border px-3 py-3 text-xs ${faceAnalysis.passed ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>
+            <div className="font-semibold">AI Face Analysis</div>
+            <div className="mt-1">
+              {faceAnalysis.engine} • score {Math.round((faceAnalysis.overall_score || 0) * 100)}% • frontal {faceAnalysis.frontal ? 'yes' : 'no'}
+            </div>
+            {faceAnalysis.guidance?.length > 0 && (
+              <div className="mt-1">{faceAnalysis.guidance.join(' ')}</div>
+            )}
+          </div>
+        )}
       </div>
       {faceImage && (
         <button onClick={handleEnrollMyFace} disabled={faceEnrollLoading} className="btn-secondary w-full text-sm disabled:opacity-50">

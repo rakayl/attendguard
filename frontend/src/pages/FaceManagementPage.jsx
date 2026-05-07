@@ -10,6 +10,7 @@ const FaceManagementPage = () => {
   const [faceImage, setFaceImage] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [analysis, setAnalysis] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -34,7 +35,8 @@ const FaceManagementPage = () => {
     setLoading(true)
     setError('')
     try {
-      await enrollFaceForUser(selectedUser, faceImage)
+      const res = await enrollFaceForUser(selectedUser, faceImage)
+      setAnalysis(res.data?.analysis || null)
       setFaceImage('')
       await load()
     } catch (err) {
@@ -70,6 +72,17 @@ const FaceManagementPage = () => {
             </select>
           </div>
           <FaceCapture value={faceImage} onCapture={setFaceImage} disabled={!selectedUser || loading} />
+          {analysis && (
+            <div className={`rounded-xl border px-4 py-3 text-xs ${analysis.passed ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>
+              <div className="font-semibold">AI Face Analysis</div>
+              <div className="mt-1">
+                {analysis.engine} • score {Math.round((analysis.overall_score || 0) * 100)}% • frontal {analysis.frontal ? 'yes' : 'no'}
+              </div>
+              {analysis.guidance?.length > 0 && (
+                <div className="mt-1">{analysis.guidance.join(' ')}</div>
+              )}
+            </div>
+          )}
           <button onClick={enroll} disabled={!selectedUser || !faceImage || loading} className="btn-primary w-full disabled:opacity-50">
             {loading ? 'Saving...' : 'Save Face Profile'}
           </button>
@@ -80,7 +93,7 @@ const FaceManagementPage = () => {
           <div className="space-y-3 text-sm text-slate-400">
             <div><span className="text-cyan-400 font-semibold">Geozone first:</span> attendance is blocked outside active polygon zones.</div>
             <div><span className="text-cyan-400 font-semibold">Face second:</span> face verification runs only after location is valid.</div>
-            <div><span className="text-cyan-400 font-semibold">Scale:</span> face templates are compact records; verification can be moved to a worker or ML service behind the same API.</div>
+            <div><span className="text-cyan-400 font-semibold">AI analysis:</span> enrollment and verification now score lighting, sharpness, symmetry, centering, and frontal pose before matching.</div>
             <div><span className="text-cyan-400 font-semibold">Multi-tenant:</span> tenant id is stored on users, attendance, devices, geofences, and face profiles.</div>
           </div>
         </div>

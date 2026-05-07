@@ -3,6 +3,7 @@ package repository
 import (
 	"attendance-system/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ---- User Repository ----
@@ -204,6 +205,7 @@ func (r *deviceRepository) FindByUserAndDeviceID(userID uint, deviceID string) (
 
 type DailyActivityFilter struct {
 	TenantID uint
+	Status   string
 	UserID   *uint
 	DateFrom *string
 	DateTo   *string
@@ -212,10 +214,17 @@ type DailyActivityFilter struct {
 type DailyActivityRepository interface {
 	Create(activity *model.DailyActivity) error
 	Update(activity *model.DailyActivity) error
-	Delete(id uint) error
+	SoftDelete(id uint) error
 	FindByID(id uint) (*model.DailyActivity, error)
-	FindAll(filter DailyActivityFilter) ([]model.DailyActivity, error)
-	FindOverlap(tenantID, userID uint, activityDate string, startMinute, endMinute int, excludeID *uint) (*model.DailyActivity, error)
+	FindByIDForUpdate(tx *gorm.DB, id uint) (*model.DailyActivity, error)
+	FindTaskByID(id uint) (*model.DailyActivityTask, error)
+	FindActivities(filter DailyActivityFilter) ([]model.DailyActivity, error)
+	CreateTask(task *model.DailyActivityTask) error
+	UpdateTask(task *model.DailyActivityTask) error
+	DeleteTask(id uint) error
+	CreateLog(log *model.DailyActivityLog) error
+	FindLogsByActivityID(activityID uint) ([]model.DailyActivityLog, error)
+	WithTransaction(fn func(repo DailyActivityRepository) error) error
 }
 
 type dailyActivityRepository struct{ db *gorm.DB }
@@ -232,23 +241,46 @@ func (r *dailyActivityRepository) Update(activity *model.DailyActivity) error {
 	return r.db.Save(activity).Error
 }
 
-func (r *dailyActivityRepository) Delete(id uint) error {
+func (r *dailyActivityRepository) SoftDelete(id uint) error {
 	return r.db.Delete(&model.DailyActivity{}, id).Error
 }
 
 func (r *dailyActivityRepository) FindByID(id uint) (*model.DailyActivity, error) {
 	var activity model.DailyActivity
-	if err := r.db.Preload("User").Preload("User.Role").First(&activity, id).Error; err != nil {
+	if err := r.db.
+		Preload("AssignedUser").Preload("AssignedUser.Role").
+		Preload("Creator").Preload("Creator.Role").
+		Preload("Tasks").Preload("Tasks.Updater").
+		First(&activity, id).Error; err != nil {
 		return nil, err
 	}
 	return &activity, nil
 }
 
-func (r *dailyActivityRepository) FindAll(filter DailyActivityFilter) ([]model.DailyActivity, error) {
+func (r *dailyActivityRepository) FindByIDForUpdate(tx *gorm.DB, id uint) (*model.DailyActivity, error) {
+	var activity model.DailyActivity
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Preload("AssignedUser").Preload("AssignedUser.Role").
+		Preload("Creator").Preload("Creator.Role").
+		Preload("Tasks").Preload("Tasks.Updater").
+		First(&activity, id).Error; err != nil {
+		return nil, err
+	}
+	return &activity, nil
+}
+
+func (r *dailyActivityRepository) FindActivities(filter DailyActivityFilter) ([]model.DailyActivity, error) {
 	var activities []model.DailyActivity
-	query := r.db.Preload("User").Preload("User.Role").Where("tenant_id = ?", filter.TenantID)
+	query := r.db.
+		Preload("AssignedUser").Preload("AssignedUser.Role").
+		Preload("Creator").Preload("Creator.Role").
+		Preload("Tasks").Preload("Tasks.Updater").
+		Where("tenant_id = ?", filter.TenantID)
 	if filter.UserID != nil {
-		query = query.Where("user_id = ?", *filter.UserID)
+		query = query.Where("assigned_to = ?", *filter.UserID)
+	}
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
 	}
 	if filter.DateFrom != nil {
 		query = query.Where("activity_date >= ?", *filter.DateFrom)
@@ -256,21 +288,52 @@ func (r *dailyActivityRepository) FindAll(filter DailyActivityFilter) ([]model.D
 	if filter.DateTo != nil {
 		query = query.Where("activity_date <= ?", *filter.DateTo)
 	}
-	err := query.Order("activity_date asc").Order("start_minute asc").Order("updated_at asc").Find(&activities).Error
+	err := query.Order("activity_date desc").Order("updated_at desc").Find(&activities).Error
 	return activities, err
 }
 
-func (r *dailyActivityRepository) FindOverlap(tenantID, userID uint, activityDate string, startMinute, endMinute int, excludeID *uint) (*model.DailyActivity, error) {
-	var activity model.DailyActivity
-	query := r.db.Where("tenant_id = ? AND user_id = ? AND activity_date = ?", tenantID, userID, activityDate).
-		Where("start_minute < ? AND end_minute > ?", endMinute, startMinute)
-	if excludeID != nil {
-		query = query.Where("id <> ?", *excludeID)
-	}
-	if err := query.First(&activity).Error; err != nil {
+func (r *dailyActivityRepository) FindTaskByID(id uint) (*model.DailyActivityTask, error) {
+	var task model.DailyActivityTask
+	if err := r.db.
+		Preload("DailyActivity").Preload("DailyActivity.AssignedUser").Preload("DailyActivity.Creator").
+		Preload("Updater").
+		First(&task, id).Error; err != nil {
 		return nil, err
 	}
-	return &activity, nil
+	return &task, nil
+}
+
+func (r *dailyActivityRepository) CreateTask(task *model.DailyActivityTask) error {
+	return r.db.Create(task).Error
+}
+
+func (r *dailyActivityRepository) UpdateTask(task *model.DailyActivityTask) error {
+	return r.db.Save(task).Error
+}
+
+func (r *dailyActivityRepository) DeleteTask(id uint) error {
+	return r.db.Delete(&model.DailyActivityTask{}, id).Error
+}
+
+func (r *dailyActivityRepository) CreateLog(log *model.DailyActivityLog) error {
+	return r.db.Create(log).Error
+}
+
+func (r *dailyActivityRepository) FindLogsByActivityID(activityID uint) ([]model.DailyActivityLog, error) {
+	var logs []model.DailyActivityLog
+	err := r.db.
+		Preload("User").
+		Preload("Task").
+		Where("daily_activity_id = ?", activityID).
+		Order("created_at desc").
+		Find(&logs).Error
+	return logs, err
+}
+
+func (r *dailyActivityRepository) WithTransaction(fn func(repo DailyActivityRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&dailyActivityRepository{db: tx})
+	})
 }
 
 // ---- Tenant Repository ----

@@ -25,6 +25,7 @@ export const ProfileScreen = () => {
   const [registered, setRegistered] = useState(false)
   const [enrollingFace, setEnrollingFace] = useState(false)
   const [faceEnrolled, setFaceEnrolled] = useState(false)
+  const [faceAiSummary, setFaceAiSummary] = useState<any | null>(null)
 
   const loadFaceStatus = async () => {
     try {
@@ -65,7 +66,8 @@ export const ProfileScreen = () => {
     setEnrollingFace(true)
     try {
       const sample = await buildLocalFaceSample(user?.id)
-      await faceAPI.enrollMe(sample)
+      const res = await faceAPI.enrollMe(sample)
+      setFaceAiSummary(res.data?.analysis || null)
       await loadFaceStatus()
       Alert.alert('Success', 'Face profile enrolled successfully.')
     } catch (err: any) {
@@ -182,6 +184,19 @@ export const ProfileScreen = () => {
             Enroll the active account face first. Admin, employee, and every other account must each store their own face profile before check-in or check-out can be used.
           </Text>
           <FacePositionGuide title="Enrollment Position" compact />
+          {faceAiSummary && (
+            <View style={[styles.aiCard, faceAiSummary.passed ? styles.aiCardPass : styles.aiCardFail]}>
+              <Text style={[styles.aiTitle, faceAiSummary.passed ? styles.aiTitlePass : styles.aiTitleFail]}>
+                AI Face Analysis: {faceAiSummary.passed ? 'Passed' : 'Needs Better Capture'}
+              </Text>
+              <Text style={styles.aiText}>
+                {faceAiSummary.engine} • score {(faceAiSummary.overall_score * 100).toFixed(0)}%
+              </Text>
+              {!!faceAiSummary.guidance?.length && (
+                <Text style={styles.aiText}>{faceAiSummary.guidance.join(' ')}</Text>
+              )}
+            </View>
+          )}
           <Button
             title={faceEnrolled ? 'Face Profile Enrolled' : 'Enroll Face Profile'}
             onPress={handleEnrollFace}
@@ -257,6 +272,13 @@ const styles = StyleSheet.create({
   permChipText: { fontSize: 10, fontFamily: 'monospace' },
   deviceHint: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: 12, lineHeight: 20 },
   deviceBtn: { marginTop: 0 },
+  aiCard: { marginBottom: 12, borderRadius: Radius.md, borderWidth: 1, padding: 12 },
+  aiCardPass: { backgroundColor: Colors.safeBg, borderColor: Colors.safeBorder },
+  aiCardFail: { backgroundColor: Colors.fraudBg, borderColor: Colors.fraudBorder },
+  aiTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, marginBottom: 4 },
+  aiTitlePass: { color: Colors.safe },
+  aiTitleFail: { color: Colors.fraud },
+  aiText: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
   logoutBtn: {
     backgroundColor: Colors.fraudBg, borderRadius: Radius.lg, borderWidth: 1,
     borderColor: Colors.fraudBorder, height: 52, alignItems: 'center', justifyContent: 'center',

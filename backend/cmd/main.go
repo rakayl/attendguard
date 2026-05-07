@@ -143,8 +143,22 @@ func main() {
 		protected.GET("/activities", middleware.RequirePermission("activity:view"), dailyActivityHandler.List)
 		protected.GET("/activities/:id", middleware.RequirePermission("activity:view"), dailyActivityHandler.Get)
 		protected.POST("/activities", middleware.RequirePermission("activity:create"), dailyActivityHandler.Create)
-		protected.PUT("/activities/:id", middleware.RequirePermission("activity:update_own"), dailyActivityHandler.Update)
-		protected.DELETE("/activities/:id", middleware.RequirePermission("activity:delete_own"), dailyActivityHandler.Delete)
+		protected.PUT("/activities/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.Update)
+		protected.DELETE("/activities/:id", middleware.RequirePermission("activity:delete"), dailyActivityHandler.Delete)
+		protected.POST("/activities/:id/tasks", middleware.RequirePermission("activity:update"), dailyActivityHandler.CreateTask)
+		protected.GET("/activities/:id/logs", middleware.RequirePermission("activity:log_view"), dailyActivityHandler.Logs)
+
+		protected.GET("/daily-activities", middleware.RequirePermission("activity:view"), dailyActivityHandler.List)
+		protected.GET("/daily-activities/:id", middleware.RequirePermission("activity:view"), dailyActivityHandler.Get)
+		protected.POST("/daily-activities", middleware.RequirePermission("activity:create"), dailyActivityHandler.Create)
+		protected.PUT("/daily-activities/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.Update)
+		protected.DELETE("/daily-activities/:id", middleware.RequirePermission("activity:delete"), dailyActivityHandler.Delete)
+		protected.POST("/daily-activities/:id/tasks", middleware.RequirePermission("activity:update"), dailyActivityHandler.CreateTask)
+		protected.GET("/daily-activities/:id/logs", middleware.RequirePermission("activity:log_view"), dailyActivityHandler.Logs)
+
+		protected.PUT("/tasks/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.UpdateTask)
+		protected.PATCH("/tasks/:id/status", middleware.RequirePermission("activity:task_update"), dailyActivityHandler.UpdateTaskStatus)
+		protected.DELETE("/tasks/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.DeleteTask)
 
 		// Device
 		protected.POST("/device/register", middleware.RequirePermission("device:register"), deviceHandler.Register)

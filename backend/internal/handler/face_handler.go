@@ -25,12 +25,16 @@ func (h *FaceHandler) EnrollSelf(c *gin.Context) {
 		return
 	}
 	req.UserID = userID
-	profile, err := h.faceSvc.Enroll(userID, req)
+	result, err := h.faceSvc.Enroll(userID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"profile": profile, "message": "Face profile enrolled"})
+	c.JSON(http.StatusCreated, gin.H{
+		"profile":  result.Profile,
+		"analysis": result.Analysis,
+		"message":  result.Message,
+	})
 }
 
 func (h *FaceHandler) VerifySelf(c *gin.Context) {
@@ -49,7 +53,15 @@ func (h *FaceHandler) VerifySelf(c *gin.Context) {
 	if !result.Verified {
 		status = http.StatusForbidden
 	}
-	c.JSON(status, gin.H{"result": result})
+	c.JSON(status, gin.H{
+		"verified":   result.Verified,
+		"score":      result.Score,
+		"threshold":  result.Threshold,
+		"profile_id": result.ProfileID,
+		"message":    result.Message,
+		"analysis":   result.Analysis,
+		"result":     result,
+	})
 }
 
 func (h *FaceHandler) MyProfiles(c *gin.Context) {
@@ -83,12 +95,16 @@ func (h *FaceHandler) EnrollForUser(c *gin.Context) {
 		return
 	}
 	req.UserID = uint(userID)
-	profile, err := h.faceSvc.Enroll(uint(userID), req)
+	result, err := h.faceSvc.Enroll(uint(userID), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"profile": profile, "message": "Face profile enrolled"})
+	c.JSON(http.StatusCreated, gin.H{
+		"profile":  result.Profile,
+		"analysis": result.Analysis,
+		"message":  result.Message,
+	})
 }
 
 func (h *FaceHandler) SetActive(c *gin.Context) {

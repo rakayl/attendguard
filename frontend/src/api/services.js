@@ -55,16 +55,31 @@ export const setFaceProfileActive = (id, isActive) =>
 
 // Daily activities
 export const getActivities = (params) =>
-  api.get('/activities', { params })
+  api.get('/daily-activities', { params })
 
 export const getActivity = (id) =>
-  api.get(`/activities/${id}`)
+  api.get(`/daily-activities/${id}`)
 
 export const createActivity = (payload) =>
-  api.post('/activities', payload)
+  api.post('/daily-activities', payload)
 
 export const updateActivity = (id, payload) =>
-  api.put(`/activities/${id}`, payload)
+  api.put(`/daily-activities/${id}`, payload)
 
 export const deleteActivity = (id) =>
-  api.delete(`/activities/${id}`)
+  api.delete(`/daily-activities/${id}`)
+
+export const getActivityLogs = (id) =>
+  api.get(`/daily-activities/${id}/logs`)
+
+export const createActivityTask = (activityId, payload) =>
+  api.post(`/daily-activities/${activityId}/tasks`, payload)
+
+export const updateTask = (id, payload) =>
+  api.put(`/tasks/${id}`, payload)
+
+export const updateTaskStatus = (id, payload) =>
+  api.patch(`/tasks/${id}/status`, payload)
+
+export const deleteTask = (id) =>
+  api.delete(`/tasks/${id}`)
