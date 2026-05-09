@@ -14,6 +14,8 @@ import PermissionsPage from './pages/PermissionsPage'
 import GeofencePage from './pages/GeofencePage'
 import FaceManagementPage from './pages/FaceManagementPage'
 import DailyActivityPage from './pages/DailyActivityPage'
+import DailyActivityCalendarPage from './pages/DailyActivityCalendarPage'
+import BoardManagementPage from './pages/BoardManagementPage'
 import { useAuthStore } from './store/authStore'
 
 const RequireAuth = ({ children }) => {
@@ -37,6 +39,8 @@ const App = () => (
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="activities" element={<RequirePermission perm="activity:view"><DailyActivityPage /></RequirePermission>} />
+        <Route path="activities/calendar" element={<RequirePermission perm="activity:view"><DailyActivityCalendarPage /></RequirePermission>} />
+        <Route path="boards" element={<RequirePermission perm="board:view"><BoardManagementPage /></RequirePermission>} />
         <Route path="checkin" element={<CheckInPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="devices" element={<DevicesPage />} />

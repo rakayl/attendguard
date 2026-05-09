@@ -50,6 +50,7 @@ func main() {
 	geofenceRepo := repository.NewGeofenceRepository(db)
 	faceRepo := repository.NewFaceProfileRepository(db)
 	dailyActivityRepo := repository.NewDailyActivityRepository(db)
+	boardRepo := repository.NewBoardRepository(db)
 
 	// ── 6. Services ───────────────────────────────────────────────────────────
 	fraudSvc := service.NewFraudDetectionService(cfg)
@@ -62,7 +63,8 @@ func main() {
 	permSvc := service.NewPermissionService(permRepo)
 	roleSvc := service.NewRoleService(roleRepo)
 	userMgmtSvc := service.NewUserManagementService(userRepo)
-	dailyActivitySvc := service.NewDailyActivityService(dailyActivityRepo)
+	dailyActivitySvc := service.NewDailyActivityService(dailyActivityRepo, userRepo)
+	boardSvc := service.NewBoardService(boardRepo, userRepo)
 
 	// ── 7. Handlers ───────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc)
@@ -75,6 +77,7 @@ func main() {
 	geofenceHandler := handler.NewGeofenceHandler(geofenceSvc)
 	faceHandler := handler.NewFaceHandler(faceSvc)
 	dailyActivityHandler := handler.NewDailyActivityHandler(dailyActivitySvc, userMgmtSvc)
+	boardHandler := handler.NewBoardHandler(boardSvc, userMgmtSvc)
 
 	// ── 8. Router ─────────────────────────────────────────────────────────────
 	r := gin.Default()
@@ -141,24 +144,49 @@ func main() {
 
 		// Daily Activity
 		protected.GET("/activities", middleware.RequirePermission("activity:view"), dailyActivityHandler.List)
+		protected.GET("/activities/calendar", middleware.RequirePermission("activity:view"), dailyActivityHandler.CalendarMonth)
+		protected.GET("/activities/calendar/:date", middleware.RequirePermission("activity:view"), dailyActivityHandler.CalendarDate)
 		protected.GET("/activities/:id", middleware.RequirePermission("activity:view"), dailyActivityHandler.Get)
 		protected.POST("/activities", middleware.RequirePermission("activity:create"), dailyActivityHandler.Create)
 		protected.PUT("/activities/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.Update)
 		protected.DELETE("/activities/:id", middleware.RequirePermission("activity:delete"), dailyActivityHandler.Delete)
 		protected.POST("/activities/:id/tasks", middleware.RequirePermission("activity:update"), dailyActivityHandler.CreateTask)
+		protected.POST("/activities/:id/comments", middleware.RequirePermission("activity:comment"), dailyActivityHandler.CreateComment)
 		protected.GET("/activities/:id/logs", middleware.RequirePermission("activity:log_view"), dailyActivityHandler.Logs)
 
 		protected.GET("/daily-activities", middleware.RequirePermission("activity:view"), dailyActivityHandler.List)
+		protected.GET("/daily-activities/calendar", middleware.RequirePermission("activity:view"), dailyActivityHandler.CalendarMonth)
+		protected.GET("/daily-activities/calendar/:date", middleware.RequirePermission("activity:view"), dailyActivityHandler.CalendarDate)
 		protected.GET("/daily-activities/:id", middleware.RequirePermission("activity:view"), dailyActivityHandler.Get)
 		protected.POST("/daily-activities", middleware.RequirePermission("activity:create"), dailyActivityHandler.Create)
 		protected.PUT("/daily-activities/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.Update)
 		protected.DELETE("/daily-activities/:id", middleware.RequirePermission("activity:delete"), dailyActivityHandler.Delete)
 		protected.POST("/daily-activities/:id/tasks", middleware.RequirePermission("activity:update"), dailyActivityHandler.CreateTask)
+		protected.POST("/daily-activities/:id/comments", middleware.RequirePermission("activity:comment"), dailyActivityHandler.CreateComment)
 		protected.GET("/daily-activities/:id/logs", middleware.RequirePermission("activity:log_view"), dailyActivityHandler.Logs)
 
 		protected.PUT("/tasks/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.UpdateTask)
-		protected.PATCH("/tasks/:id/status", middleware.RequirePermission("activity:task_update"), dailyActivityHandler.UpdateTaskStatus)
+		protected.PATCH("/tasks/:id/status", middleware.RequirePermission("activity:task_update"), dailyActivityHandler.ToggleTask)
+		protected.PATCH("/tasks/:id/toggle", middleware.RequirePermission("activity:task_update"), dailyActivityHandler.ToggleTask)
 		protected.DELETE("/tasks/:id", middleware.RequirePermission("activity:update"), dailyActivityHandler.DeleteTask)
+		protected.PUT("/comments/:id", middleware.RequirePermission("activity:comment"), dailyActivityHandler.UpdateComment)
+		protected.DELETE("/comments/:id", middleware.RequirePermission("activity:comment"), dailyActivityHandler.DeleteComment)
+
+		// Board management
+		protected.GET("/workspaces", middleware.RequirePermission("board:view"), boardHandler.ListWorkspaces)
+		protected.POST("/workspaces", middleware.RequirePermission("board:create"), boardHandler.CreateWorkspace)
+		protected.POST("/workspaces/:id/boards", middleware.RequirePermission("board:create"), boardHandler.CreateBoard)
+		protected.GET("/boards/:id", middleware.RequirePermission("board:view"), boardHandler.GetBoard)
+		protected.PUT("/boards/:id", middleware.RequirePermission("board:update"), boardHandler.UpdateBoard)
+		protected.POST("/boards/:id/lists", middleware.RequirePermission("board:update"), boardHandler.CreateList)
+		protected.PUT("/lists/:id", middleware.RequirePermission("board:update"), boardHandler.UpdateList)
+		protected.POST("/lists/:id/cards", middleware.RequirePermission("board:update"), boardHandler.CreateCard)
+		protected.PUT("/cards/:id", middleware.RequirePermission("board:update"), boardHandler.UpdateCard)
+		protected.PATCH("/cards/:id/move", middleware.RequirePermission("board:update"), boardHandler.MoveCard)
+		protected.POST("/cards/:id/checklists", middleware.RequirePermission("board:update"), boardHandler.CreateChecklist)
+		protected.POST("/checklists/:id/items", middleware.RequirePermission("board:update"), boardHandler.CreateChecklistItem)
+		protected.PATCH("/checklist-items/:id/toggle", middleware.RequirePermission("board:update"), boardHandler.ToggleChecklistItem)
+		protected.POST("/cards/:id/comments", middleware.RequirePermission("board:comment"), boardHandler.CreateComment)
 
 		// Device
 		protected.POST("/device/register", middleware.RequirePermission("device:register"), deviceHandler.Register)

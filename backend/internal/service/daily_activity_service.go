@@ -14,28 +14,17 @@ import (
 var (
 	ErrActivityForbidden       = errors.New("you are not allowed to modify this daily activity")
 	ErrTaskForbidden           = errors.New("you are not allowed to modify this task")
-	ErrTaskStatusTransition    = errors.New("invalid task status transition")
+	ErrCommentForbidden        = errors.New("you are not allowed to modify this comment")
 	ErrDailyActivityBadRequest = errors.New("invalid daily activity request")
 )
 
 type DailyActivityStatus string
-type DailyActivityTaskStatus string
-type DailyActivityTaskPriority string
 
 const (
 	DailyActivityPending    DailyActivityStatus = "pending"
 	DailyActivityInProgress DailyActivityStatus = "in_progress"
 	DailyActivityCompleted  DailyActivityStatus = "completed"
 	DailyActivityCancelled  DailyActivityStatus = "cancelled"
-
-	TaskPending   DailyActivityTaskStatus = "pending"
-	TaskProgress  DailyActivityTaskStatus = "progress"
-	TaskDone      DailyActivityTaskStatus = "done"
-	TaskCancelled DailyActivityTaskStatus = "cancelled"
-
-	TaskPriorityLow    DailyActivityTaskPriority = "low"
-	TaskPriorityMedium DailyActivityTaskPriority = "medium"
-	TaskPriorityHigh   DailyActivityTaskPriority = "high"
 )
 
 type DailyActivityFilterRequest struct {
@@ -47,9 +36,25 @@ type DailyActivityFilterRequest struct {
 	DateTo     string
 }
 
+type DailyActivityCalendarMonthResource struct {
+	Month string                             `json:"month"`
+	Days  []DailyActivityCalendarDayResource `json:"days"`
+}
+
+type DailyActivityCalendarDayResource struct {
+	Date       string                  `json:"date"`
+	Total      int                     `json:"total"`
+	Pending    int                     `json:"pending"`
+	InProgress int                     `json:"in_progress"`
+	Completed  int                     `json:"completed"`
+	Cancelled  int                     `json:"cancelled"`
+	Activities []DailyActivityResource `json:"activities,omitempty"`
+}
+
 type CreateDailyActivityRequest struct {
 	Title        string `json:"title" binding:"required,max=120"`
 	Description  string `json:"description" binding:"max=2000"`
+	TemplateColor string `json:"template_color"`
 	AssignedTo   uint   `json:"assigned_to" binding:"required"`
 	ActivityDate string `json:"activity_date" binding:"required"`
 }
@@ -57,28 +62,32 @@ type CreateDailyActivityRequest struct {
 type UpdateDailyActivityRequest struct {
 	Title        string `json:"title" binding:"required,max=120"`
 	Description  string `json:"description" binding:"max=2000"`
+	TemplateColor string `json:"template_color"`
 	AssignedTo   uint   `json:"assigned_to" binding:"required"`
 	ActivityDate string `json:"activity_date" binding:"required"`
+	Status       string `json:"status"`
 }
 
 type CreateDailyActivityTaskRequest struct {
 	Title       string `json:"title" binding:"required,max=160"`
 	Description string `json:"description" binding:"max=2000"`
-	Status      string `json:"status"`
-	Priority    string `json:"priority"`
-	DueTime     string `json:"due_time"`
 }
 
 type UpdateDailyActivityTaskRequest struct {
 	Title       string `json:"title" binding:"required,max=160"`
 	Description string `json:"description" binding:"max=2000"`
-	Status      string `json:"status" binding:"required"`
-	Priority    string `json:"priority" binding:"required"`
-	DueTime     string `json:"due_time"`
 }
 
-type UpdateDailyActivityTaskStatusRequest struct {
-	Status string `json:"status" binding:"required"`
+type ToggleDailyActivityTaskRequest struct {
+	IsCompleted *bool `json:"is_completed"`
+}
+
+type CreateDailyActivityCommentRequest struct {
+	Message string `json:"message" binding:"required"`
+}
+
+type UpdateDailyActivityCommentRequest struct {
+	Message string `json:"message" binding:"required"`
 }
 
 type DailyActivityUserResource struct {
@@ -94,69 +103,87 @@ type DailyActivityTaskResource struct {
 	DailyActivityID uint                       `json:"daily_activity_id"`
 	Title           string                     `json:"title"`
 	Description     string                     `json:"description"`
-	Status          string                     `json:"status"`
-	Priority        string                     `json:"priority"`
-	DueTime         *time.Time                 `json:"due_time"`
+	IsCompleted     bool                       `json:"is_completed"`
+	CompletedAt     *time.Time                 `json:"completed_at"`
+	CreatedBy       uint                       `json:"created_by"`
 	UpdatedBy       *uint                      `json:"updated_by"`
+	Creator         DailyActivityUserResource  `json:"creator"`
 	Updater         *DailyActivityUserResource `json:"updater,omitempty"`
 	CreatedAt       time.Time                  `json:"created_at"`
 	UpdatedAt       time.Time                  `json:"updated_at"`
 }
 
+type DailyActivityCommentResource struct {
+	ID              uint                      `json:"id"`
+	DailyActivityID uint                      `json:"daily_activity_id"`
+	Message         string                    `json:"message"`
+	User            DailyActivityUserResource `json:"user"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	UpdatedAt       time.Time                 `json:"updated_at"`
+}
+
 type DailyActivityLogResource struct {
-	ID                  uint                      `json:"id"`
-	DailyActivityID     *uint                     `json:"daily_activity_id"`
-	DailyActivityTaskID *uint                     `json:"daily_activity_task_id"`
-	User                DailyActivityUserResource `json:"user"`
-	Action              string                    `json:"action"`
-	OldValue            json.RawMessage           `json:"old_value,omitempty"`
-	NewValue            json.RawMessage           `json:"new_value,omitempty"`
-	Description         string                    `json:"description"`
-	CreatedAt           time.Time                 `json:"created_at"`
+	ID              uint                      `json:"id"`
+	DailyActivityID *uint                     `json:"daily_activity_id"`
+	TaskID          *uint                     `json:"task_id,omitempty"`
+	CommentID       *uint                     `json:"comment_id,omitempty"`
+	User            DailyActivityUserResource `json:"user"`
+	Action          string                    `json:"action"`
+	OldValue        json.RawMessage           `json:"old_value,omitempty"`
+	NewValue        json.RawMessage           `json:"new_value,omitempty"`
+	Description     string                    `json:"description"`
+	CreatedAt       time.Time                 `json:"created_at"`
 }
 
 type DailyActivityResource struct {
-	ID                 uint                        `json:"id"`
-	Title              string                      `json:"title"`
-	Description        string                      `json:"description"`
-	AssignedTo         uint                        `json:"assigned_to"`
-	AssignedUser       DailyActivityUserResource   `json:"assigned_user"`
-	CreatedBy          uint                        `json:"created_by"`
-	Creator            DailyActivityUserResource   `json:"creator"`
-	ActivityDate       string                      `json:"activity_date"`
-	Status             string                      `json:"status"`
-	StartedAt          *time.Time                  `json:"started_at"`
-	CompletedAt        *time.Time                  `json:"completed_at"`
-	TaskCount          int                         `json:"task_count"`
-	CompletedTaskCount int                         `json:"completed_task_count"`
-	ProgressPercentage int                         `json:"progress_percentage"`
-	Tasks              []DailyActivityTaskResource `json:"tasks,omitempty"`
-	CreatedAt          time.Time                   `json:"created_at"`
-	UpdatedAt          time.Time                   `json:"updated_at"`
+	ID                 uint                           `json:"id"`
+	Title              string                         `json:"title"`
+	Description        string                         `json:"description"`
+	TemplateColor      string                         `json:"template_color"`
+	AssignedTo         uint                           `json:"assigned_to"`
+	AssignedUser       DailyActivityUserResource      `json:"assigned_user"`
+	CreatedBy          uint                           `json:"created_by"`
+	Creator            DailyActivityUserResource      `json:"creator"`
+	ActivityDate       string                         `json:"activity_date"`
+	Status             string                         `json:"status"`
+	ProgressPercentage int                            `json:"progress_percentage"`
+	TotalTasks         int                            `json:"total_tasks"`
+	CompletedTasks     int                            `json:"completed_tasks"`
+	CompletedAt        *time.Time                     `json:"completed_at"`
+	Tasks              []DailyActivityTaskResource    `json:"tasks,omitempty"`
+	Comments           []DailyActivityCommentResource `json:"comments,omitempty"`
+	CreatedAt          time.Time                      `json:"created_at"`
+	UpdatedAt          time.Time                      `json:"updated_at"`
 }
 
 type DailyActivityService interface {
-	List(filter DailyActivityFilterRequest) ([]DailyActivityResource, error)
-	GetByID(id, actorID uint) (*DailyActivityResource, error)
+	List(actor *model.User, filter DailyActivityFilterRequest) ([]DailyActivityResource, error)
+	GetByID(id uint, actor *model.User) (*DailyActivityResource, error)
 	Create(actor *model.User, req CreateDailyActivityRequest) (*DailyActivityResource, error)
 	Update(id uint, actor *model.User, req UpdateDailyActivityRequest) (*DailyActivityResource, error)
 	Delete(id uint, actor *model.User) error
 	CreateTask(activityID uint, actor *model.User, req CreateDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error)
 	UpdateTask(taskID uint, actor *model.User, req UpdateDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error)
-	UpdateTaskStatus(taskID uint, actor *model.User, req UpdateDailyActivityTaskStatusRequest) (*DailyActivityTaskResource, *DailyActivityResource, error)
+	ToggleTask(taskID uint, actor *model.User, req ToggleDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error)
 	DeleteTask(taskID uint, actor *model.User) (*DailyActivityResource, error)
-	GetLogs(activityID uint, actorID uint) ([]DailyActivityLogResource, error)
+	CreateComment(activityID uint, actor *model.User, req CreateDailyActivityCommentRequest) (*DailyActivityCommentResource, *DailyActivityResource, error)
+	UpdateComment(commentID uint, actor *model.User, req UpdateDailyActivityCommentRequest) (*DailyActivityCommentResource, *DailyActivityResource, error)
+	DeleteComment(commentID uint, actor *model.User) (*DailyActivityResource, error)
+	GetLogs(activityID uint, actor *model.User) ([]DailyActivityLogResource, error)
+	GetCalendarMonth(actor *model.User, month string) (*DailyActivityCalendarMonthResource, error)
+	GetCalendarDate(actor *model.User, date string) (*DailyActivityCalendarDayResource, error)
 }
 
 type dailyActivityService struct {
-	repo repository.DailyActivityRepository
+	repo     repository.DailyActivityRepository
+	userRepo repository.UserRepository
 }
 
-func NewDailyActivityService(repo repository.DailyActivityRepository) DailyActivityService {
-	return &dailyActivityService{repo: repo}
+func NewDailyActivityService(repo repository.DailyActivityRepository, userRepo repository.UserRepository) DailyActivityService {
+	return &dailyActivityService{repo: repo, userRepo: userRepo}
 }
 
-func (s *dailyActivityService) List(filter DailyActivityFilterRequest) ([]DailyActivityResource, error) {
+func (s *dailyActivityService) List(actor *model.User, filter DailyActivityFilterRequest) ([]DailyActivityResource, error) {
 	dateFrom, dateTo, err := resolveDateFilter(filter.DatePreset, filter.DateFrom, filter.DateTo)
 	if err != nil {
 		return nil, err
@@ -173,40 +200,56 @@ func (s *dailyActivityService) List(filter DailyActivityFilterRequest) ([]DailyA
 	}
 	res := make([]DailyActivityResource, 0, len(items))
 	for _, item := range items {
+		if !canViewActivity(actor, &item) {
+			continue
+		}
 		res = append(res, toDailyActivityResource(item, false))
 	}
 	return res, nil
 }
 
-func (s *dailyActivityService) GetByID(id, actorID uint) (*DailyActivityResource, error) {
+func (s *dailyActivityService) GetByID(id uint, actor *model.User) (*DailyActivityResource, error) {
 	item, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
+	}
+	if !canViewActivity(actor, item) {
+		return nil, ErrActivityForbidden
 	}
 	res := toDailyActivityResource(*item, true)
 	return &res, nil
 }
 
 func (s *dailyActivityService) Create(actor *model.User, req CreateDailyActivityRequest) (*DailyActivityResource, error) {
-	title, description, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.AssignedTo, req.ActivityDate)
+	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, req.AssignedTo, req.ActivityDate)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureActivityAssignmentAllowed(actor, assignedTo); err != nil {
+		return nil, err
+	}
+	if err := s.ensureAssignableUser(actor.TenantID, assignedTo); err != nil {
 		return nil, err
 	}
 	var resource *DailyActivityResource
 	err = s.repo.WithTransaction(func(repo repository.DailyActivityRepository) error {
 		activity := &model.DailyActivity{
-			TenantID:     actor.TenantID,
-			Title:        title,
-			Description:  description,
-			AssignedTo:   assignedTo,
-			CreatedBy:    actor.ID,
-			ActivityDate: activityDate,
-			Status:       string(DailyActivityPending),
+			TenantID:           actor.TenantID,
+			Title:              title,
+			Description:        description,
+			TemplateColor:      templateColor,
+			AssignedTo:         assignedTo,
+			CreatedBy:          actor.ID,
+			ActivityDate:       activityDate,
+			Status:             string(DailyActivityPending),
+			ProgressPercentage: 0,
+			TotalTasks:         0,
+			CompletedTasks:     0,
 		}
 		if err := repo.Create(activity); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(activity.ID, nil, actor.ID, "activity.created", nil, activitySnapshot(activity), fmt.Sprintf("Created daily activity '%s'", activity.Title))); err != nil {
+		if err := repo.CreateLog(buildLog(activity.ID, nil, nil, actor.ID, "activity.created", nil, activitySnapshot(activity), fmt.Sprintf("Created daily activity '%s'", activity.Title))); err != nil {
 			return err
 		}
 		created, err := repo.FindByID(activity.ID)
@@ -221,8 +264,18 @@ func (s *dailyActivityService) Create(actor *model.User, req CreateDailyActivity
 }
 
 func (s *dailyActivityService) Update(id uint, actor *model.User, req UpdateDailyActivityRequest) (*DailyActivityResource, error) {
-	title, description, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.AssignedTo, req.ActivityDate)
+	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, req.AssignedTo, req.ActivityDate)
 	if err != nil {
+		return nil, err
+	}
+	statusOverride, err := normalizeActivityStatus(req.Status)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureActivityAssignmentAllowed(actor, assignedTo); err != nil {
+		return nil, err
+	}
+	if err := s.ensureAssignableUser(actor.TenantID, assignedTo); err != nil {
 		return nil, err
 	}
 	var resource *DailyActivityResource
@@ -231,26 +284,33 @@ func (s *dailyActivityService) Update(id uint, actor *model.User, req UpdateDail
 		if err != nil {
 			return err
 		}
-		if !canManageActivity(actor.ID, activity) {
+		if !canManageActivity(actor, activity) {
 			return ErrActivityForbidden
 		}
 		oldValue := activitySnapshot(activity)
 		activity.Title = title
 		activity.Description = description
+		activity.TemplateColor = templateColor
 		activity.AssignedTo = assignedTo
 		activity.ActivityDate = activityDate
+		if statusOverride == string(DailyActivityCancelled) {
+			activity.Status = string(DailyActivityCancelled)
+			activity.CompletedAt = nil
+		} else {
+			applyActivityProgress(activity)
+		}
 		if err := repo.Update(activity); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(activity.ID, nil, actor.ID, "activity.updated", oldValue, activitySnapshot(activity), fmt.Sprintf("Updated daily activity '%s'", activity.Title))); err != nil {
+		if err := repo.CreateLog(buildLog(activity.ID, nil, nil, actor.ID, "activity.updated", oldValue, activitySnapshot(activity), fmt.Sprintf("Updated daily activity '%s'", activity.Title))); err != nil {
 			return err
 		}
 		updated, err := repo.FindByID(id)
 		if err != nil {
 			return err
 		}
-		next := toDailyActivityResource(*updated, true)
-		resource = &next
+		value := toDailyActivityResource(*updated, true)
+		resource = &value
 		return nil
 	})
 	return resource, err
@@ -262,19 +322,19 @@ func (s *dailyActivityService) Delete(id uint, actor *model.User) error {
 		if err != nil {
 			return err
 		}
-		if !canManageActivity(actor.ID, activity) {
+		if !canManageActivity(actor, activity) {
 			return ErrActivityForbidden
 		}
 		oldValue := activitySnapshot(activity)
 		if err := repo.SoftDelete(id); err != nil {
 			return err
 		}
-		return repo.CreateLog(buildLog(activity.ID, nil, actor.ID, "activity.deleted", oldValue, nil, fmt.Sprintf("Deleted daily activity '%s'", activity.Title)))
+		return repo.CreateLog(buildLog(activity.ID, nil, nil, actor.ID, "activity.deleted", oldValue, nil, fmt.Sprintf("Deleted daily activity '%s'", activity.Title)))
 	})
 }
 
 func (s *dailyActivityService) CreateTask(activityID uint, actor *model.User, req CreateDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error) {
-	title, description, status, priority, dueTime, err := validateTaskInput(req.Title, req.Description, req.Status, req.Priority, req.DueTime, true)
+	title, description, err := validateTaskInput(req.Title, req.Description)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,25 +345,28 @@ func (s *dailyActivityService) CreateTask(activityID uint, actor *model.User, re
 		if err != nil {
 			return err
 		}
-		if !canManageActivity(actor.ID, activity) {
+		if !canManageActivity(actor, activity) {
 			return ErrActivityForbidden
 		}
 		task := &model.DailyActivityTask{
 			DailyActivityID: activityID,
 			Title:           title,
 			Description:     description,
-			Status:          string(status),
-			Priority:        string(priority),
-			DueTime:         dueTime,
+			CreatedBy:       actor.ID,
 			UpdatedBy:       &actor.ID,
 		}
 		if err := repo.CreateTask(task); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(activityID, &task.ID, actor.ID, "task.created", nil, taskSnapshot(task), fmt.Sprintf("Created task '%s'", task.Title))); err != nil {
+		updatedActivity, err := repo.FindByID(activityID)
+		if err != nil {
 			return err
 		}
-		if err := s.recalculateActivityState(repo, activityID, actor.ID); err != nil {
+		applyActivityProgress(updatedActivity)
+		if err := repo.Update(updatedActivity); err != nil {
+			return err
+		}
+		if err := repo.CreateLog(buildLog(activityID, &task.ID, nil, actor.ID, "task.created", nil, taskSnapshot(task), fmt.Sprintf("Created task '%s'", task.Title))); err != nil {
 			return err
 		}
 		freshTask, err := repo.FindTaskByID(task.ID)
@@ -324,7 +387,7 @@ func (s *dailyActivityService) CreateTask(activityID uint, actor *model.User, re
 }
 
 func (s *dailyActivityService) UpdateTask(taskID uint, actor *model.User, req UpdateDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error) {
-	title, description, status, priority, dueTime, err := validateTaskInput(req.Title, req.Description, req.Status, req.Priority, req.DueTime, false)
+	title, description, err := validateTaskInput(req.Title, req.Description)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -335,28 +398,17 @@ func (s *dailyActivityService) UpdateTask(taskID uint, actor *model.User, req Up
 		if err != nil {
 			return err
 		}
-		if !canModifyTask(actor.ID, task) {
+		if !canManageActivity(actor, &task.DailyActivity) {
 			return ErrTaskForbidden
 		}
 		oldValue := taskSnapshot(task)
-		if !canManageActivity(actor.ID, &task.DailyActivity) && task.Status != string(status) {
-			if err := validateTaskStatusTransition(DailyActivityTaskStatus(task.Status), status); err != nil {
-				return err
-			}
-		}
 		task.Title = title
 		task.Description = description
-		task.Status = string(status)
-		task.Priority = string(priority)
-		task.DueTime = dueTime
 		task.UpdatedBy = &actor.ID
 		if err := repo.UpdateTask(task); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, actor.ID, "task.updated", oldValue, taskSnapshot(task), fmt.Sprintf("Updated task '%s'", task.Title))); err != nil {
-			return err
-		}
-		if err := s.recalculateActivityState(repo, task.DailyActivityID, actor.ID); err != nil {
+		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, nil, actor.ID, "task.updated", oldValue, taskSnapshot(task), fmt.Sprintf("Updated task '%s'", task.Title))); err != nil {
 			return err
 		}
 		freshTask, err := repo.FindTaskByID(task.ID)
@@ -376,11 +428,7 @@ func (s *dailyActivityService) UpdateTask(taskID uint, actor *model.User, req Up
 	return taskRes, activityRes, err
 }
 
-func (s *dailyActivityService) UpdateTaskStatus(taskID uint, actor *model.User, req UpdateDailyActivityTaskStatusRequest) (*DailyActivityTaskResource, *DailyActivityResource, error) {
-	status := DailyActivityTaskStatus(req.Status)
-	if !isValidTaskStatus(status) {
-		return nil, nil, fmt.Errorf("%w: status must be pending, progress, done, or cancelled", ErrDailyActivityBadRequest)
-	}
+func (s *dailyActivityService) ToggleTask(taskID uint, actor *model.User, req ToggleDailyActivityTaskRequest) (*DailyActivityTaskResource, *DailyActivityResource, error) {
 	var taskRes *DailyActivityTaskResource
 	var activityRes *DailyActivityResource
 	err := s.repo.WithTransaction(func(repo repository.DailyActivityRepository) error {
@@ -388,22 +436,43 @@ func (s *dailyActivityService) UpdateTaskStatus(taskID uint, actor *model.User, 
 		if err != nil {
 			return err
 		}
-		if !canModifyTask(actor.ID, task) {
+		if !canToggleTask(actor, task) {
 			return ErrTaskForbidden
 		}
-		if err := validateTaskStatusTransition(DailyActivityTaskStatus(task.Status), status); err != nil {
-			return err
+		if task.DailyActivity.Status == string(DailyActivityCancelled) && !canManageActivity(actor, &task.DailyActivity) {
+			return fmt.Errorf("%w: cancelled activity cannot be updated", ErrTaskForbidden)
 		}
 		oldValue := taskSnapshot(task)
-		task.Status = string(status)
+		nextCompleted := !task.IsCompleted
+		if req.IsCompleted != nil {
+			nextCompleted = *req.IsCompleted
+		}
+		task.IsCompleted = nextCompleted
+		if nextCompleted {
+			now := time.Now()
+			task.CompletedAt = &now
+		} else {
+			task.CompletedAt = nil
+		}
 		task.UpdatedBy = &actor.ID
 		if err := repo.UpdateTask(task); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, actor.ID, "task.status_changed", oldValue, taskSnapshot(task), fmt.Sprintf("Changed task '%s' status to %s", task.Title, task.Status))); err != nil {
+		updatedActivity, err := repo.FindByID(task.DailyActivityID)
+		if err != nil {
 			return err
 		}
-		if err := s.recalculateActivityState(repo, task.DailyActivityID, actor.ID); err != nil {
+		applyActivityProgress(updatedActivity)
+		if err := repo.Update(updatedActivity); err != nil {
+			return err
+		}
+		action := "task.checked"
+		description := fmt.Sprintf("Checked task '%s'", task.Title)
+		if !nextCompleted {
+			action = "task.unchecked"
+			description = fmt.Sprintf("Unchecked task '%s'", task.Title)
+		}
+		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, nil, actor.ID, action, oldValue, taskSnapshot(task), description)); err != nil {
 			return err
 		}
 		freshTask, err := repo.FindTaskByID(task.ID)
@@ -430,17 +499,22 @@ func (s *dailyActivityService) DeleteTask(taskID uint, actor *model.User) (*Dail
 		if err != nil {
 			return err
 		}
-		if !canManageActivity(actor.ID, &task.DailyActivity) {
+		if !canManageActivity(actor, &task.DailyActivity) {
 			return ErrTaskForbidden
 		}
 		oldValue := taskSnapshot(task)
 		if err := repo.DeleteTask(taskID); err != nil {
 			return err
 		}
-		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, actor.ID, "task.deleted", oldValue, nil, fmt.Sprintf("Deleted task '%s'", task.Title))); err != nil {
+		updatedActivity, err := repo.FindByID(task.DailyActivityID)
+		if err != nil {
 			return err
 		}
-		if err := s.recalculateActivityState(repo, task.DailyActivityID, actor.ID); err != nil {
+		applyActivityProgress(updatedActivity)
+		if err := repo.Update(updatedActivity); err != nil {
+			return err
+		}
+		if err := repo.CreateLog(buildLog(task.DailyActivityID, &task.ID, nil, actor.ID, "task.deleted", oldValue, nil, fmt.Sprintf("Deleted task '%s'", task.Title))); err != nil {
 			return err
 		}
 		freshActivity, err := repo.FindByID(task.DailyActivityID)
@@ -454,12 +528,123 @@ func (s *dailyActivityService) DeleteTask(taskID uint, actor *model.User) (*Dail
 	return activityRes, err
 }
 
-func (s *dailyActivityService) GetLogs(activityID uint, actorID uint) ([]DailyActivityLogResource, error) {
+func (s *dailyActivityService) CreateComment(activityID uint, actor *model.User, req CreateDailyActivityCommentRequest) (*DailyActivityCommentResource, *DailyActivityResource, error) {
+	message, err := validateCommentMessage(req.Message)
+	if err != nil {
+		return nil, nil, err
+	}
+	var commentRes *DailyActivityCommentResource
+	var activityRes *DailyActivityResource
+	err = s.repo.WithTransaction(func(repo repository.DailyActivityRepository) error {
+		activity, err := repo.FindByID(activityID)
+		if err != nil {
+			return err
+		}
+		if !canComment(actor, activity) {
+			return ErrCommentForbidden
+		}
+		comment := &model.DailyActivityComment{
+			DailyActivityID: activityID,
+			UserID:          actor.ID,
+			Message:         message,
+		}
+		if err := repo.CreateComment(comment); err != nil {
+			return err
+		}
+		if err := repo.CreateLog(buildLog(activityID, nil, &comment.ID, actor.ID, "comment.created", nil, commentSnapshot(comment), "Added a comment")); err != nil {
+			return err
+		}
+		freshComment, err := repo.FindCommentByID(comment.ID)
+		if err != nil {
+			return err
+		}
+		freshActivity, err := repo.FindByID(activityID)
+		if err != nil {
+			return err
+		}
+		commentValue := toCommentResource(*freshComment)
+		activityValue := toDailyActivityResource(*freshActivity, true)
+		commentRes = &commentValue
+		activityRes = &activityValue
+		return nil
+	})
+	return commentRes, activityRes, err
+}
+
+func (s *dailyActivityService) UpdateComment(commentID uint, actor *model.User, req UpdateDailyActivityCommentRequest) (*DailyActivityCommentResource, *DailyActivityResource, error) {
+	message, err := validateCommentMessage(req.Message)
+	if err != nil {
+		return nil, nil, err
+	}
+	var commentRes *DailyActivityCommentResource
+	var activityRes *DailyActivityResource
+	err = s.repo.WithTransaction(func(repo repository.DailyActivityRepository) error {
+		comment, err := repo.FindCommentByID(commentID)
+		if err != nil {
+			return err
+		}
+		if !canManageComment(actor, comment) {
+			return ErrCommentForbidden
+		}
+		oldValue := commentSnapshot(comment)
+		comment.Message = message
+		if err := repo.UpdateComment(comment); err != nil {
+			return err
+		}
+		if err := repo.CreateLog(buildLog(comment.DailyActivityID, nil, &comment.ID, actor.ID, "comment.updated", oldValue, commentSnapshot(comment), "Updated a comment")); err != nil {
+			return err
+		}
+		freshComment, err := repo.FindCommentByID(comment.ID)
+		if err != nil {
+			return err
+		}
+		freshActivity, err := repo.FindByID(comment.DailyActivityID)
+		if err != nil {
+			return err
+		}
+		commentValue := toCommentResource(*freshComment)
+		activityValue := toDailyActivityResource(*freshActivity, true)
+		commentRes = &commentValue
+		activityRes = &activityValue
+		return nil
+	})
+	return commentRes, activityRes, err
+}
+
+func (s *dailyActivityService) DeleteComment(commentID uint, actor *model.User) (*DailyActivityResource, error) {
+	var activityRes *DailyActivityResource
+	err := s.repo.WithTransaction(func(repo repository.DailyActivityRepository) error {
+		comment, err := repo.FindCommentByID(commentID)
+		if err != nil {
+			return err
+		}
+		if !canManageComment(actor, comment) {
+			return ErrCommentForbidden
+		}
+		oldValue := commentSnapshot(comment)
+		if err := repo.DeleteComment(commentID); err != nil {
+			return err
+		}
+		if err := repo.CreateLog(buildLog(comment.DailyActivityID, nil, &comment.ID, actor.ID, "comment.deleted", oldValue, nil, "Deleted a comment")); err != nil {
+			return err
+		}
+		freshActivity, err := repo.FindByID(comment.DailyActivityID)
+		if err != nil {
+			return err
+		}
+		value := toDailyActivityResource(*freshActivity, true)
+		activityRes = &value
+		return nil
+	})
+	return activityRes, err
+}
+
+func (s *dailyActivityService) GetLogs(activityID uint, actor *model.User) ([]DailyActivityLogResource, error) {
 	activity, err := s.repo.FindByID(activityID)
 	if err != nil {
 		return nil, err
 	}
-	if actorID != activity.CreatedBy && actorID != activity.AssignedTo {
+	if !canViewActivity(actor, activity) {
 		return nil, ErrActivityForbidden
 	}
 	logs, err := s.repo.FindLogsByActivityID(activityID)
@@ -473,82 +658,182 @@ func (s *dailyActivityService) GetLogs(activityID uint, actorID uint) ([]DailyAc
 	return res, nil
 }
 
-func (s *dailyActivityService) recalculateActivityState(repo repository.DailyActivityRepository, activityID, actorID uint) error {
-	activity, err := repo.FindByID(activityID)
+func (s *dailyActivityService) GetCalendarMonth(actor *model.User, month string) (*DailyActivityCalendarMonthResource, error) {
+	start, end, canonicalMonth, err := resolveCalendarMonth(month)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	oldValue := activityStateSnapshot(activity)
-	nextStatus, startedAt, completedAt := summarizeActivityTasks(activity.Tasks)
-	activity.Status = string(nextStatus)
-	activity.StartedAt = startedAt
-	activity.CompletedAt = completedAt
-	if err := repo.Update(activity); err != nil {
-		return err
+	items, err := s.repo.FindActivities(repository.DailyActivityFilter{
+		TenantID: actor.TenantID,
+		DateFrom: &start,
+		DateTo:   &end,
+	})
+	if err != nil {
+		return nil, err
 	}
-	newValue := activityStateSnapshot(activity)
-	if mustJSON(oldValue) == mustJSON(newValue) {
-		return nil
+	grouped := make(map[string]*DailyActivityCalendarDayResource)
+	for _, item := range items {
+		if !canViewActivity(actor, &item) {
+			continue
+		}
+		key := item.ActivityDate.Format("2006-01-02")
+		day := grouped[key]
+		if day == nil {
+			day = &DailyActivityCalendarDayResource{Date: key}
+			grouped[key] = day
+		}
+		day.Total++
+		incrementDayStatus(day, item.Status)
+		day.Activities = append(day.Activities, toDailyActivityResource(item, false))
 	}
-	return repo.CreateLog(buildLog(activity.ID, nil, actorID, "activity.status_synced", oldValue, newValue, fmt.Sprintf("Activity status recalculated to %s", activity.Status)))
+	days := make([]DailyActivityCalendarDayResource, 0, len(grouped))
+	for cursor := mustParseDate(start); !cursor.After(mustParseDate(end)); cursor = cursor.AddDate(0, 0, 1) {
+		key := cursor.Format("2006-01-02")
+		if day, ok := grouped[key]; ok {
+			days = append(days, *day)
+			continue
+		}
+		days = append(days, DailyActivityCalendarDayResource{Date: key})
+	}
+	return &DailyActivityCalendarMonthResource{
+		Month: canonicalMonth,
+		Days:  days,
+	}, nil
 }
 
-func validateActivityInput(title, description string, assignedTo uint, activityDate string) (string, string, uint, time.Time, error) {
+func (s *dailyActivityService) GetCalendarDate(actor *model.User, date string) (*DailyActivityCalendarDayResource, error) {
+	parsed, err := time.Parse("2006-01-02", strings.TrimSpace(date))
+	if err != nil {
+		return nil, fmt.Errorf("%w: date must use YYYY-MM-DD format", ErrDailyActivityBadRequest)
+	}
+	dayValue := parsed.Format("2006-01-02")
+	items, err := s.repo.FindActivities(repository.DailyActivityFilter{
+		TenantID: actor.TenantID,
+		DateFrom: &dayValue,
+		DateTo:   &dayValue,
+	})
+	if err != nil {
+		return nil, err
+	}
+	resource := &DailyActivityCalendarDayResource{
+		Date:       dayValue,
+		Activities: make([]DailyActivityResource, 0),
+	}
+	for _, item := range items {
+		if !canViewActivity(actor, &item) {
+			continue
+		}
+		resource.Total++
+		incrementDayStatus(resource, item.Status)
+		resource.Activities = append(resource.Activities, toDailyActivityResource(item, true))
+	}
+	return resource, nil
+}
+
+func validateActivityInput(title, description, templateColor string, assignedTo uint, activityDate string) (string, string, string, uint, time.Time, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
 	if title == "" {
-		return "", "", 0, time.Time{}, fmt.Errorf("%w: title is required", ErrDailyActivityBadRequest)
+		return "", "", "", 0, time.Time{}, fmt.Errorf("%w: title is required", ErrDailyActivityBadRequest)
 	}
 	if len(title) > 120 {
-		return "", "", 0, time.Time{}, fmt.Errorf("%w: title must be 120 characters or less", ErrDailyActivityBadRequest)
+		return "", "", "", 0, time.Time{}, fmt.Errorf("%w: title must be 120 characters or less", ErrDailyActivityBadRequest)
 	}
 	if len(description) > 2000 {
-		return "", "", 0, time.Time{}, fmt.Errorf("%w: description must be 2000 characters or less", ErrDailyActivityBadRequest)
+		return "", "", "", 0, time.Time{}, fmt.Errorf("%w: description must be 2000 characters or less", ErrDailyActivityBadRequest)
 	}
 	if assignedTo == 0 {
-		return "", "", 0, time.Time{}, fmt.Errorf("%w: assigned_to is required", ErrDailyActivityBadRequest)
+		return "", "", "", 0, time.Time{}, fmt.Errorf("%w: assigned_to is required", ErrDailyActivityBadRequest)
 	}
 	dateValue, err := time.Parse("2006-01-02", activityDate)
 	if err != nil {
-		return "", "", 0, time.Time{}, fmt.Errorf("%w: activity_date must use YYYY-MM-DD format", ErrDailyActivityBadRequest)
+		return "", "", "", 0, time.Time{}, fmt.Errorf("%w: activity_date must use YYYY-MM-DD format", ErrDailyActivityBadRequest)
 	}
-	return title, description, assignedTo, dateValue, nil
+	return title, description, normalizeActivityTemplateColor(templateColor), assignedTo, dateValue, nil
 }
 
-func validateTaskInput(title, description, rawStatus, rawPriority, rawDueTime string, isCreate bool) (string, string, DailyActivityTaskStatus, DailyActivityTaskPriority, *time.Time, error) {
+func validateTaskInput(title, description string) (string, string, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
 	if title == "" {
-		return "", "", "", "", nil, fmt.Errorf("%w: task title is required", ErrDailyActivityBadRequest)
+		return "", "", fmt.Errorf("%w: task title is required", ErrDailyActivityBadRequest)
 	}
 	if len(title) > 160 {
-		return "", "", "", "", nil, fmt.Errorf("%w: task title must be 160 characters or less", ErrDailyActivityBadRequest)
+		return "", "", fmt.Errorf("%w: task title must be 160 characters or less", ErrDailyActivityBadRequest)
 	}
 	if len(description) > 2000 {
-		return "", "", "", "", nil, fmt.Errorf("%w: task description must be 2000 characters or less", ErrDailyActivityBadRequest)
+		return "", "", fmt.Errorf("%w: task description must be 2000 characters or less", ErrDailyActivityBadRequest)
 	}
-	status := DailyActivityTaskStatus(rawStatus)
-	if status == "" {
-		status = TaskPending
+	return title, description, nil
+}
+
+func validateCommentMessage(message string) (string, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", fmt.Errorf("%w: message is required", ErrDailyActivityBadRequest)
 	}
-	if !isValidTaskStatus(status) {
-		return "", "", "", "", nil, fmt.Errorf("%w: task status must be pending, progress, done, or cancelled", ErrDailyActivityBadRequest)
+	if len(message) > 3000 {
+		return "", fmt.Errorf("%w: message must be 3000 characters or less", ErrDailyActivityBadRequest)
 	}
-	priority := DailyActivityTaskPriority(rawPriority)
-	if priority == "" {
-		priority = TaskPriorityMedium
+	return message, nil
+}
+
+func normalizeActivityStatus(raw string) (string, error) {
+	status := strings.TrimSpace(raw)
+	switch status {
+	case "", string(DailyActivityPending), string(DailyActivityInProgress), string(DailyActivityCompleted):
+		return status, nil
+	case string(DailyActivityCancelled):
+		return status, nil
+	default:
+		return "", fmt.Errorf("%w: status must be pending, in_progress, completed, or cancelled", ErrDailyActivityBadRequest)
 	}
-	if !isValidTaskPriority(priority) {
-		return "", "", "", "", nil, fmt.Errorf("%w: task priority must be low, medium, or high", ErrDailyActivityBadRequest)
+}
+
+func normalizeActivityTemplateColor(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "emerald", "amber", "rose", "violet", "slate":
+		return strings.TrimSpace(raw)
+	default:
+		return "cyan"
 	}
-	dueTime, err := parseOptionalDateTime(rawDueTime)
+}
+
+func (s *dailyActivityService) ensureAssignableUser(tenantID, userID uint) error {
+	user, err := s.userRepo.FindByIDWithRole(userID)
 	if err != nil {
-		return "", "", "", "", nil, err
+		return fmt.Errorf("%w: assigned user not found", ErrDailyActivityBadRequest)
 	}
-	if isCreate && status != TaskPending {
-		return "", "", "", "", nil, fmt.Errorf("%w: new task must start as pending", ErrDailyActivityBadRequest)
+	if !user.IsActive {
+		return fmt.Errorf("%w: assigned user is inactive", ErrDailyActivityBadRequest)
 	}
-	return title, description, status, priority, dueTime, nil
+	if user.TenantID != tenantID {
+		return fmt.Errorf("%w: assigned user belongs to a different tenant", ErrDailyActivityBadRequest)
+	}
+	return nil
+}
+
+func (s *dailyActivityService) ensureActivityAssignmentAllowed(actor *model.User, assignedTo uint) error {
+	target, err := s.userRepo.FindByIDWithRole(assignedTo)
+	if err != nil {
+		return fmt.Errorf("%w: assigned user not found", ErrDailyActivityBadRequest)
+	}
+	if actor == nil {
+		return ErrActivityForbidden
+	}
+	if isAdmin(actor) {
+		return nil
+	}
+	if actor.ID == target.ID {
+		return nil
+	}
+	if isEmployee(actor) {
+		return fmt.Errorf("%w: employees can only create activities for themselves", ErrActivityForbidden)
+	}
+	if isEmployee(target) {
+		return nil
+	}
+	return fmt.Errorf("%w: you can only assign activities to yourself or employee accounts", ErrActivityForbidden)
 }
 
 func resolveDateFilter(preset, from, to string) (*string, *string, error) {
@@ -583,145 +868,142 @@ func resolveDateFilter(preset, from, to string) (*string, *string, error) {
 	}
 }
 
-func parseOptionalDateTime(raw string) (*time.Time, error) {
-	if strings.TrimSpace(raw) == "" {
-		return nil, nil
-	}
-	layouts := []string{time.RFC3339, "2006-01-02T15:04", "2006-01-02 15:04"}
-	for _, layout := range layouts {
-		if parsed, err := time.Parse(layout, raw); err == nil {
-			return &parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("%w: due_time must use RFC3339 or YYYY-MM-DDTHH:MM format", ErrDailyActivityBadRequest)
-}
-
-func validateTaskStatusTransition(current, next DailyActivityTaskStatus) error {
-	if current == next {
-		return nil
-	}
-	allowed := map[DailyActivityTaskStatus][]DailyActivityTaskStatus{
-		TaskPending:   {TaskProgress, TaskCancelled},
-		TaskProgress:  {TaskDone, TaskCancelled},
-		TaskDone:      {},
-		TaskCancelled: {},
-	}
-	for _, candidate := range allowed[current] {
-		if candidate == next {
-			return nil
-		}
-	}
-	return fmt.Errorf("%w: %s cannot change to %s", ErrTaskStatusTransition, current, next)
-}
-
-func summarizeActivityTasks(tasks []model.DailyActivityTask) (DailyActivityStatus, *time.Time, *time.Time) {
-	if len(tasks) == 0 {
-		return DailyActivityPending, nil, nil
-	}
-	allDone := true
-	allCancelled := true
-	anyProgress := false
-	var latest time.Time
-	for _, task := range tasks {
-		switch DailyActivityTaskStatus(task.Status) {
-		case TaskProgress:
-			anyProgress = true
-			allDone = false
-			allCancelled = false
-		case TaskDone:
-			allCancelled = false
-			if task.UpdatedAt.After(latest) {
-				latest = task.UpdatedAt
+func applyActivityProgress(activity *model.DailyActivity) {
+	totalTasks := len(activity.Tasks)
+	completedTasks := 0
+	var latestCompletedAt *time.Time
+	for i := range activity.Tasks {
+		task := activity.Tasks[i]
+		if task.IsCompleted {
+			completedTasks++
+			if task.CompletedAt != nil && (latestCompletedAt == nil || task.CompletedAt.After(*latestCompletedAt)) {
+				ts := *task.CompletedAt
+				latestCompletedAt = &ts
 			}
-		case TaskCancelled:
-			allDone = false
-		default:
-			allDone = false
-			allCancelled = false
-		}
-		if task.Status != string(TaskDone) {
-			allDone = false
-		}
-		if task.Status != string(TaskCancelled) {
-			allCancelled = false
 		}
 	}
-	if allDone {
-		completedAt := latest
-		if completedAt.IsZero() {
-			completedAt = time.Now()
+	activity.TotalTasks = totalTasks
+	activity.CompletedTasks = completedTasks
+	if totalTasks == 0 {
+		activity.ProgressPercentage = 0
+		activity.CompletedAt = nil
+		if activity.Status != string(DailyActivityCancelled) {
+			activity.Status = string(DailyActivityPending)
 		}
-		return DailyActivityCompleted, nil, &completedAt
+		return
 	}
-	if anyProgress {
-		startedAt := time.Now()
-		return DailyActivityInProgress, &startedAt, nil
+	activity.ProgressPercentage = int((float64(completedTasks) / float64(totalTasks)) * 100)
+	if activity.Status == string(DailyActivityCancelled) {
+		activity.CompletedAt = nil
+		return
 	}
-	if allCancelled {
-		return DailyActivityCancelled, nil, nil
+	switch {
+	case completedTasks == 0:
+		activity.Status = string(DailyActivityPending)
+		activity.CompletedAt = nil
+	case completedTasks == totalTasks:
+		activity.Status = string(DailyActivityCompleted)
+		activity.CompletedAt = latestCompletedAt
+	default:
+		activity.Status = string(DailyActivityInProgress)
+		activity.CompletedAt = nil
 	}
-	return DailyActivityPending, nil, nil
 }
 
-func isValidTaskStatus(status DailyActivityTaskStatus) bool {
+func canViewActivity(actor *model.User, activity *model.DailyActivity) bool {
+	if actor == nil || activity == nil {
+		return false
+	}
+	if isAdmin(actor) {
+		return true
+	}
+	return actor.ID == activity.CreatedBy || actor.ID == activity.AssignedTo
+}
+
+func canManageActivity(actor *model.User, activity *model.DailyActivity) bool {
+	return actor.ID == activity.CreatedBy || isAdmin(actor)
+}
+
+func canToggleTask(actor *model.User, task *model.DailyActivityTask) bool {
+	return actor.ID == task.DailyActivity.CreatedBy || actor.ID == task.DailyActivity.AssignedTo || isAdmin(actor)
+}
+
+func canComment(actor *model.User, activity *model.DailyActivity) bool {
+	return actor.ID == activity.CreatedBy || actor.ID == activity.AssignedTo || isAdmin(actor)
+}
+
+func canManageComment(actor *model.User, comment *model.DailyActivityComment) bool {
+	return actor.ID == comment.UserID || isAdmin(actor)
+}
+
+func isAdmin(actor *model.User) bool {
+	return actor != nil && actor.Role != nil && actor.Role.Name == "admin"
+}
+
+func isEmployee(actor *model.User) bool {
+	return actor != nil && actor.Role != nil && actor.Role.Name == "employee"
+}
+
+func incrementDayStatus(day *DailyActivityCalendarDayResource, status string) {
 	switch status {
-	case TaskPending, TaskProgress, TaskDone, TaskCancelled:
-		return true
+	case string(DailyActivityCompleted):
+		day.Completed++
+	case string(DailyActivityInProgress):
+		day.InProgress++
+	case string(DailyActivityCancelled):
+		day.Cancelled++
 	default:
-		return false
+		day.Pending++
 	}
 }
 
-func isValidTaskPriority(priority DailyActivityTaskPriority) bool {
-	switch priority {
-	case TaskPriorityLow, TaskPriorityMedium, TaskPriorityHigh:
-		return true
-	default:
-		return false
+func resolveCalendarMonth(month string) (string, string, string, error) {
+	base := strings.TrimSpace(month)
+	if base == "" {
+		now := time.Now()
+		base = now.Format("2006-01")
 	}
+	parsed, err := time.Parse("2006-01", base)
+	if err != nil {
+		return "", "", "", fmt.Errorf("%w: month must use YYYY-MM format", ErrDailyActivityBadRequest)
+	}
+	start := time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, time.Local)
+	end := start.AddDate(0, 1, -1)
+	return start.Format("2006-01-02"), end.Format("2006-01-02"), start.Format("2006-01"), nil
 }
 
-func canManageActivity(actorID uint, activity *model.DailyActivity) bool {
-	return actorID == activity.CreatedBy
+func mustParseDate(value string) time.Time {
+	parsed, _ := time.Parse("2006-01-02", value)
+	return parsed
 }
 
-func canModifyTask(actorID uint, task *model.DailyActivityTask) bool {
-	return actorID == task.DailyActivity.CreatedBy || actorID == task.DailyActivity.AssignedTo
-}
-
-func toDailyActivityResource(activity model.DailyActivity, includeTasks bool) DailyActivityResource {
-	completedCount := 0
-	for _, task := range activity.Tasks {
-		if task.Status == string(TaskDone) {
-			completedCount++
-		}
-	}
-	progressPercentage := 0
-	if len(activity.Tasks) > 0 {
-		progressPercentage = int(float64(completedCount) / float64(len(activity.Tasks)) * 100)
-	}
+func toDailyActivityResource(activity model.DailyActivity, includeDetails bool) DailyActivityResource {
 	resource := DailyActivityResource{
 		ID:                 activity.ID,
 		Title:              activity.Title,
 		Description:        activity.Description,
+		TemplateColor:      activity.TemplateColor,
 		AssignedTo:         activity.AssignedTo,
 		AssignedUser:       toUserResource(activity.AssignedUser),
 		CreatedBy:          activity.CreatedBy,
 		Creator:            toUserResource(activity.Creator),
 		ActivityDate:       activity.ActivityDate.Format("2006-01-02"),
 		Status:             activity.Status,
-		StartedAt:          activity.StartedAt,
+		ProgressPercentage: activity.ProgressPercentage,
+		TotalTasks:         activity.TotalTasks,
+		CompletedTasks:     activity.CompletedTasks,
 		CompletedAt:        activity.CompletedAt,
-		TaskCount:          len(activity.Tasks),
-		CompletedTaskCount: completedCount,
-		ProgressPercentage: progressPercentage,
 		CreatedAt:          activity.CreatedAt,
 		UpdatedAt:          activity.UpdatedAt,
 	}
-	if includeTasks {
+	if includeDetails {
 		resource.Tasks = make([]DailyActivityTaskResource, 0, len(activity.Tasks))
 		for _, task := range activity.Tasks {
 			resource.Tasks = append(resource.Tasks, toTaskResource(task))
+		}
+		resource.Comments = make([]DailyActivityCommentResource, 0, len(activity.Comments))
+		for _, comment := range activity.Comments {
+			resource.Comments = append(resource.Comments, toCommentResource(comment))
 		}
 	}
 	return resource
@@ -733,10 +1015,11 @@ func toTaskResource(task model.DailyActivityTask) DailyActivityTaskResource {
 		DailyActivityID: task.DailyActivityID,
 		Title:           task.Title,
 		Description:     task.Description,
-		Status:          task.Status,
-		Priority:        task.Priority,
-		DueTime:         task.DueTime,
+		IsCompleted:     task.IsCompleted,
+		CompletedAt:     task.CompletedAt,
+		CreatedBy:       task.CreatedBy,
 		UpdatedBy:       task.UpdatedBy,
+		Creator:         toUserResource(task.Creator),
 		CreatedAt:       task.CreatedAt,
 		UpdatedAt:       task.UpdatedAt,
 	}
@@ -747,20 +1030,32 @@ func toTaskResource(task model.DailyActivityTask) DailyActivityTaskResource {
 	return resource
 }
 
+func toCommentResource(comment model.DailyActivityComment) DailyActivityCommentResource {
+	return DailyActivityCommentResource{
+		ID:              comment.ID,
+		DailyActivityID: comment.DailyActivityID,
+		Message:         comment.Message,
+		User:            toUserResource(comment.User),
+		CreatedAt:       comment.CreatedAt,
+		UpdatedAt:       comment.UpdatedAt,
+	}
+}
+
 func toLogResource(log model.DailyActivityLog) DailyActivityLogResource {
 	resource := DailyActivityLogResource{
-		ID:                  log.ID,
-		DailyActivityID:     log.DailyActivityID,
-		DailyActivityTaskID: log.DailyActivityTaskID,
-		User:                toUserResource(log.User),
-		Action:              log.Action,
-		Description:         log.Description,
-		CreatedAt:           log.CreatedAt,
+		ID:              log.ID,
+		DailyActivityID: log.DailyActivityID,
+		TaskID:          log.TaskID,
+		CommentID:       log.CommentID,
+		User:            toUserResource(log.User),
+		Action:          log.Action,
+		Description:     log.Description,
+		CreatedAt:       log.CreatedAt,
 	}
-	if log.OldValue != "" {
+	if log.OldValue != "" && log.OldValue != "null" {
 		resource.OldValue = json.RawMessage(log.OldValue)
 	}
-	if log.NewValue != "" {
+	if log.NewValue != "" && log.NewValue != "null" {
 		resource.NewValue = json.RawMessage(log.NewValue)
 	}
 	return resource
@@ -782,48 +1077,44 @@ func toUserResource(user model.User) DailyActivityUserResource {
 	}
 }
 
-func buildLog(activityID uint, taskID *uint, actorID uint, action string, oldValue any, newValue any, description string) *model.DailyActivityLog {
+func buildLog(activityID uint, taskID *uint, commentID *uint, actorID uint, action string, oldValue any, newValue any, description string) *model.DailyActivityLog {
 	return &model.DailyActivityLog{
-		DailyActivityID:     &activityID,
-		DailyActivityTaskID: taskID,
-		UserID:              actorID,
-		Action:              action,
-		OldValue:            mustJSON(oldValue),
-		NewValue:            mustJSON(newValue),
-		Description:         description,
+		DailyActivityID: &activityID,
+		TaskID:          taskID,
+		CommentID:       commentID,
+		UserID:          actorID,
+		Action:          action,
+		OldValue:        mustJSON(oldValue),
+		NewValue:        mustJSON(newValue),
+		Description:     description,
 	}
 }
 
 func mustJSON(value any) string {
 	if value == nil {
-		return ""
+		return "null"
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return ""
+		return "null"
 	}
 	return string(raw)
 }
 
 func activitySnapshot(activity *model.DailyActivity) map[string]any {
 	return map[string]any{
-		"id":            activity.ID,
-		"title":         activity.Title,
-		"description":   activity.Description,
-		"assigned_to":   activity.AssignedTo,
-		"created_by":    activity.CreatedBy,
-		"activity_date": activity.ActivityDate.Format("2006-01-02"),
-		"status":        activity.Status,
-		"started_at":    activity.StartedAt,
-		"completed_at":  activity.CompletedAt,
-	}
-}
-
-func activityStateSnapshot(activity *model.DailyActivity) map[string]any {
-	return map[string]any{
-		"status":       activity.Status,
-		"started_at":   activity.StartedAt,
-		"completed_at": activity.CompletedAt,
+		"id":                  activity.ID,
+		"title":               activity.Title,
+		"description":         activity.Description,
+		"template_color":      activity.TemplateColor,
+		"assigned_to":         activity.AssignedTo,
+		"created_by":          activity.CreatedBy,
+		"activity_date":       activity.ActivityDate.Format("2006-01-02"),
+		"status":              activity.Status,
+		"progress_percentage": activity.ProgressPercentage,
+		"total_tasks":         activity.TotalTasks,
+		"completed_tasks":     activity.CompletedTasks,
+		"completed_at":        activity.CompletedAt,
 	}
 }
 
@@ -833,9 +1124,18 @@ func taskSnapshot(task *model.DailyActivityTask) map[string]any {
 		"daily_activity_id": task.DailyActivityID,
 		"title":             task.Title,
 		"description":       task.Description,
-		"status":            task.Status,
-		"priority":          task.Priority,
-		"due_time":          task.DueTime,
+		"is_completed":      task.IsCompleted,
+		"completed_at":      task.CompletedAt,
+		"created_by":        task.CreatedBy,
 		"updated_by":        task.UpdatedBy,
+	}
+}
+
+func commentSnapshot(comment *model.DailyActivityComment) map[string]any {
+	return map[string]any{
+		"id":                comment.ID,
+		"daily_activity_id": comment.DailyActivityID,
+		"user_id":           comment.UserID,
+		"message":           comment.Message,
 	}
 }

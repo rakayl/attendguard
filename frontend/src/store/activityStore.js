@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import * as services from '../api/services'
 
+const extractData = (res) => res?.data?.data
+
 const syncActivityInList = (activities, next) =>
   activities.map((item) => (item.id === next.id ? next : item))
 
@@ -8,6 +10,10 @@ export const useActivityStore = create((set, get) => ({
   activities: [],
   selectedActivity: null,
   logs: [],
+  calendarMonth: '',
+  calendarDays: [],
+  calendarSelectedDate: '',
+  calendarSelectedDay: null,
   filters: {
     date_preset: 'today',
     date_from: '',
@@ -22,6 +28,7 @@ export const useActivityStore = create((set, get) => ({
   setFilters: (next) => set((state) => ({
     filters: { ...state.filters, ...next },
   })),
+  setCalendarSelectedDate: (calendarSelectedDate) => set({ calendarSelectedDate }),
 
   fetchActivities: async (overrides = {}) => {
     set({ loading: true, error: '' })
@@ -35,7 +42,8 @@ export const useActivityStore = create((set, get) => ({
       if (!params.assigned_user) delete params.assigned_user
       if (!params.status) delete params.status
       const res = await services.getActivities(params)
-      const activities = res.data.activities || []
+      const payload = extractData(res) || {}
+      const activities = payload.activities || []
       const selectedId = get().selectedActivity?.id
       const selectedActivity = selectedId ? activities.find((item) => item.id === selectedId) || null : null
       set({ activities, filters, selectedActivity })
@@ -53,10 +61,11 @@ export const useActivityStore = create((set, get) => ({
         services.getActivity(id),
         services.getActivityLogs(id),
       ])
-      const activity = activityRes.data.activity
+      const activity = extractData(activityRes)
+      const logsPayload = extractData(logsRes) || {}
       set((state) => ({
         selectedActivity: activity,
-        logs: logsRes.data.logs || [],
+        logs: logsPayload.logs || [],
         activities: state.activities.some((item) => item.id === activity.id)
           ? syncActivityInList(state.activities, activity)
           : [activity, ...state.activities],
@@ -75,7 +84,7 @@ export const useActivityStore = create((set, get) => ({
     set({ saving: true, error: '' })
     try {
       const res = await services.createActivity(payload)
-      const activity = res.data.activity
+      const activity = extractData(res)
       set((state) => ({
         activities: [activity, ...state.activities],
         selectedActivity: activity,
@@ -95,7 +104,7 @@ export const useActivityStore = create((set, get) => ({
     set({ saving: true, error: '' })
     try {
       const res = await services.updateActivity(id, payload)
-      const activity = res.data.activity
+      const activity = extractData(res)
       set((state) => ({
         activities: syncActivityInList(state.activities, activity),
         selectedActivity: state.selectedActivity?.id === id ? activity : state.selectedActivity,
@@ -132,7 +141,8 @@ export const useActivityStore = create((set, get) => ({
   fetchLogs: async (activityId) => {
     try {
       const res = await services.getActivityLogs(activityId)
-      set({ logs: res.data.logs || [] })
+      const payload = extractData(res) || {}
+      set({ logs: payload.logs || [] })
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to load activity logs'
       set({ error: message })
@@ -140,17 +150,56 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
+  fetchCalendarMonth: async (month) => {
+    set({ loading: true, error: '' })
+    try {
+      const res = await services.getActivityCalendar(month)
+      const payload = extractData(res) || {}
+      set({
+        calendarMonth: payload.month || month || '',
+        calendarDays: payload.days || [],
+      })
+      return payload
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to load calendar'
+      set({ error: message })
+      throw new Error(message)
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  fetchCalendarDate: async (date) => {
+    set({ loading: true, error: '' })
+    try {
+      const res = await services.getActivityCalendarDate(date)
+      const payload = extractData(res)
+      set({
+        calendarSelectedDate: date,
+        calendarSelectedDay: payload,
+      })
+      return payload
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to load calendar day'
+      set({ error: message })
+      throw new Error(message)
+    } finally {
+      set({ loading: false })
+    }
+  },
+
   createTask: async (activityId, payload) => {
     set({ saving: true, error: '' })
     try {
       const res = await services.createActivityTask(activityId, payload)
-      const activity = res.data.activity
+      const payloadData = extractData(res) || {}
+      const activity = payloadData.activity
       set((state) => ({
         activities: syncActivityInList(state.activities, activity),
         selectedActivity: activity,
       }))
       await get().fetchLogs(activityId)
-      return res.data.task
+      return payloadData.task
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to create task'
       set({ error: message })
@@ -164,13 +213,14 @@ export const useActivityStore = create((set, get) => ({
     set({ saving: true, error: '' })
     try {
       const res = await services.updateTask(taskId, payload)
-      const activity = res.data.activity
+      const payloadData = extractData(res) || {}
+      const activity = payloadData.activity
       set((state) => ({
         activities: syncActivityInList(state.activities, activity),
         selectedActivity: activity,
       }))
       await get().fetchLogs(activity.id)
-      return res.data.task
+      return payloadData.task
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to update task'
       set({ error: message })
@@ -180,19 +230,20 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
-  updateTaskStatus: async (taskId, status) => {
+  toggleTask: async (taskId, isCompleted) => {
     set({ error: '' })
     try {
-      const res = await services.updateTaskStatus(taskId, { status })
-      const activity = res.data.activity
+      const res = await services.toggleTask(taskId, typeof isCompleted === 'boolean' ? { is_completed: isCompleted } : {})
+      const payloadData = extractData(res) || {}
+      const activity = payloadData.activity
       set((state) => ({
         activities: syncActivityInList(state.activities, activity),
         selectedActivity: activity,
       }))
       await get().fetchLogs(activity.id)
-      return res.data.task
+      return payloadData.task
     } catch (err) {
-      const message = err.response?.data?.error || 'Failed to update task status'
+      const message = err.response?.data?.error || 'Failed to update task'
       set({ error: message })
       throw new Error(message)
     }
@@ -202,7 +253,7 @@ export const useActivityStore = create((set, get) => ({
     set({ saving: true, error: '' })
     try {
       const res = await services.deleteTask(taskId)
-      const activity = res.data.activity
+      const activity = extractData(res)
       set((state) => ({
         activities: syncActivityInList(state.activities, activity),
         selectedActivity: activity,
@@ -210,6 +261,67 @@ export const useActivityStore = create((set, get) => ({
       await get().fetchLogs(activity.id)
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to delete task'
+      set({ error: message })
+      throw new Error(message)
+    } finally {
+      set({ saving: false })
+    }
+  },
+
+  createComment: async (activityId, message) => {
+    set({ saving: true, error: '' })
+    try {
+      const res = await services.createActivityComment(activityId, { message })
+      const payloadData = extractData(res) || {}
+      const activity = payloadData.activity
+      set((state) => ({
+        activities: syncActivityInList(state.activities, activity),
+        selectedActivity: activity,
+      }))
+      await get().fetchLogs(activity.id)
+      return payloadData.comment
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to create comment'
+      set({ error: message })
+      throw new Error(message)
+    } finally {
+      set({ saving: false })
+    }
+  },
+
+  updateComment: async (commentId, message) => {
+    set({ saving: true, error: '' })
+    try {
+      const res = await services.updateComment(commentId, { message })
+      const payloadData = extractData(res) || {}
+      const activity = payloadData.activity
+      set((state) => ({
+        activities: syncActivityInList(state.activities, activity),
+        selectedActivity: activity,
+      }))
+      await get().fetchLogs(activity.id)
+      return payloadData.comment
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to update comment'
+      set({ error: message })
+      throw new Error(message)
+    } finally {
+      set({ saving: false })
+    }
+  },
+
+  deleteComment: async (commentId) => {
+    set({ saving: true, error: '' })
+    try {
+      const res = await services.deleteComment(commentId)
+      const activity = extractData(res)
+      set((state) => ({
+        activities: syncActivityInList(state.activities, activity),
+        selectedActivity: activity,
+      }))
+      await get().fetchLogs(activity.id)
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to delete comment'
       set({ error: message })
       throw new Error(message)
     } finally {

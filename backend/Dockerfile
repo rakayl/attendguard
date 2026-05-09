@@ -3,9 +3,13 @@ FROM golang:1.23-alpine3.19 AS builder
 
 WORKDIR /app
 
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOSUMDB=sum.golang.org
+ENV GOFLAGS=-buildvcs=false
+
 # Download dependencies first (layer cache)
 COPY go.mod go.sum* ./
-RUN go mod download
+RUN sh -c 'for i in 1 2 3 4 5; do go mod download && exit 0; echo "go mod download failed, retry $i"; sleep 5; done; exit 1'
 
 # Copy source
 COPY . .
@@ -27,8 +31,10 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-# ca-certificates for HTTPS, tzdata for timezone support
-RUN apk add --no-cache ca-certificates tzdata
+# Avoid network-dependent apk install in runtime stage.
+# Reuse CA certificates from the builder image so final builds stay stable
+# even when Alpine mirrors are slow or temporarily unavailable.
+COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 
 # Copy binaries from builder
 COPY --from=builder /app/attendguard .

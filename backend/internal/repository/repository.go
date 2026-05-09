@@ -218,10 +218,14 @@ type DailyActivityRepository interface {
 	FindByID(id uint) (*model.DailyActivity, error)
 	FindByIDForUpdate(tx *gorm.DB, id uint) (*model.DailyActivity, error)
 	FindTaskByID(id uint) (*model.DailyActivityTask, error)
+	FindCommentByID(id uint) (*model.DailyActivityComment, error)
 	FindActivities(filter DailyActivityFilter) ([]model.DailyActivity, error)
 	CreateTask(task *model.DailyActivityTask) error
 	UpdateTask(task *model.DailyActivityTask) error
 	DeleteTask(id uint) error
+	CreateComment(comment *model.DailyActivityComment) error
+	UpdateComment(comment *model.DailyActivityComment) error
+	DeleteComment(id uint) error
 	CreateLog(log *model.DailyActivityLog) error
 	FindLogsByActivityID(activityID uint) ([]model.DailyActivityLog, error)
 	WithTransaction(fn func(repo DailyActivityRepository) error) error
@@ -250,7 +254,10 @@ func (r *dailyActivityRepository) FindByID(id uint) (*model.DailyActivity, error
 	if err := r.db.
 		Preload("AssignedUser").Preload("AssignedUser.Role").
 		Preload("Creator").Preload("Creator.Role").
-		Preload("Tasks").Preload("Tasks.Updater").
+		Preload("Tasks", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Tasks.Creator").Preload("Tasks.Updater").
+		Preload("Comments", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Comments.User").Preload("Comments.User.Role").
 		First(&activity, id).Error; err != nil {
 		return nil, err
 	}
@@ -262,7 +269,10 @@ func (r *dailyActivityRepository) FindByIDForUpdate(tx *gorm.DB, id uint) (*mode
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Preload("AssignedUser").Preload("AssignedUser.Role").
 		Preload("Creator").Preload("Creator.Role").
-		Preload("Tasks").Preload("Tasks.Updater").
+		Preload("Tasks", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Tasks.Creator").Preload("Tasks.Updater").
+		Preload("Comments", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Comments.User").Preload("Comments.User.Role").
 		First(&activity, id).Error; err != nil {
 		return nil, err
 	}
@@ -274,7 +284,10 @@ func (r *dailyActivityRepository) FindActivities(filter DailyActivityFilter) ([]
 	query := r.db.
 		Preload("AssignedUser").Preload("AssignedUser.Role").
 		Preload("Creator").Preload("Creator.Role").
-		Preload("Tasks").Preload("Tasks.Updater").
+		Preload("Tasks", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Tasks.Creator").Preload("Tasks.Updater").
+		Preload("Comments", func(db *gorm.DB) *gorm.DB { return db.Order("created_at asc") }).
+		Preload("Comments.User").Preload("Comments.User.Role").
 		Where("tenant_id = ?", filter.TenantID)
 	if filter.UserID != nil {
 		query = query.Where("assigned_to = ?", *filter.UserID)
@@ -296,11 +309,22 @@ func (r *dailyActivityRepository) FindTaskByID(id uint) (*model.DailyActivityTas
 	var task model.DailyActivityTask
 	if err := r.db.
 		Preload("DailyActivity").Preload("DailyActivity.AssignedUser").Preload("DailyActivity.Creator").
-		Preload("Updater").
+		Preload("Creator").Preload("Updater").
 		First(&task, id).Error; err != nil {
 		return nil, err
 	}
 	return &task, nil
+}
+
+func (r *dailyActivityRepository) FindCommentByID(id uint) (*model.DailyActivityComment, error) {
+	var comment model.DailyActivityComment
+	if err := r.db.
+		Preload("DailyActivity").Preload("DailyActivity.AssignedUser").Preload("DailyActivity.Creator").
+		Preload("User").Preload("User.Role").
+		First(&comment, id).Error; err != nil {
+		return nil, err
+	}
+	return &comment, nil
 }
 
 func (r *dailyActivityRepository) CreateTask(task *model.DailyActivityTask) error {
@@ -315,6 +339,18 @@ func (r *dailyActivityRepository) DeleteTask(id uint) error {
 	return r.db.Delete(&model.DailyActivityTask{}, id).Error
 }
 
+func (r *dailyActivityRepository) CreateComment(comment *model.DailyActivityComment) error {
+	return r.db.Create(comment).Error
+}
+
+func (r *dailyActivityRepository) UpdateComment(comment *model.DailyActivityComment) error {
+	return r.db.Save(comment).Error
+}
+
+func (r *dailyActivityRepository) DeleteComment(id uint) error {
+	return r.db.Delete(&model.DailyActivityComment{}, id).Error
+}
+
 func (r *dailyActivityRepository) CreateLog(log *model.DailyActivityLog) error {
 	return r.db.Create(log).Error
 }
@@ -322,8 +358,9 @@ func (r *dailyActivityRepository) CreateLog(log *model.DailyActivityLog) error {
 func (r *dailyActivityRepository) FindLogsByActivityID(activityID uint) ([]model.DailyActivityLog, error) {
 	var logs []model.DailyActivityLog
 	err := r.db.
-		Preload("User").
+		Preload("User").Preload("User.Role").
 		Preload("Task").
+		Preload("Comment").
 		Where("daily_activity_id = ?", activityID).
 		Order("created_at desc").
 		Find(&logs).Error

@@ -126,23 +126,27 @@ type Device struct {
 }
 
 type DailyActivity struct {
-	ID           uint                `gorm:"primaryKey" json:"id"`
-	TenantID     uint                `gorm:"not null;default:1;index" json:"tenant_id"`
-	Title        string              `gorm:"size:120;not null" json:"title"`
-	Description  string              `gorm:"type:text" json:"description"`
-	AssignedTo   uint                `gorm:"not null;index" json:"assigned_to"`
-	AssignedUser User                `gorm:"foreignKey:AssignedTo" json:"assigned_user,omitempty"`
-	CreatedBy    uint                `gorm:"not null;index" json:"created_by"`
-	Creator      User                `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
-	ActivityDate time.Time           `gorm:"type:date;not null;index" json:"activity_date"`
-	Status       string              `gorm:"size:20;not null;default:'pending'" json:"status"`
-	StartedAt    *time.Time          `json:"started_at"`
-	CompletedAt  *time.Time          `json:"completed_at"`
-	CreatedAt    time.Time           `json:"created_at"`
-	UpdatedAt    time.Time           `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt      `gorm:"index" json:"deleted_at,omitempty"`
-	Tasks        []DailyActivityTask `gorm:"foreignKey:DailyActivityID" json:"tasks,omitempty"`
-	Logs         []DailyActivityLog  `gorm:"foreignKey:DailyActivityID" json:"logs,omitempty"`
+	ID                 uint                   `gorm:"primaryKey" json:"id"`
+	TenantID           uint                   `gorm:"not null;default:1;index" json:"tenant_id"`
+	Title              string                 `gorm:"size:120;not null" json:"title"`
+	Description        string                 `gorm:"type:text" json:"description"`
+	TemplateColor      string                 `gorm:"size:24;not null;default:'cyan'" json:"template_color"`
+	AssignedTo         uint                   `gorm:"not null;index" json:"assigned_to"`
+	AssignedUser       User                   `gorm:"foreignKey:AssignedTo" json:"assigned_user,omitempty"`
+	CreatedBy          uint                   `gorm:"not null;index" json:"created_by"`
+	Creator            User                   `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	ActivityDate       time.Time              `gorm:"type:date;not null;index" json:"activity_date"`
+	Status             string                 `gorm:"size:20;not null;default:'pending'" json:"status"`
+	ProgressPercentage int                    `gorm:"not null;default:0" json:"progress_percentage"`
+	TotalTasks         int                    `gorm:"not null;default:0" json:"total_tasks"`
+	CompletedTasks     int                    `gorm:"not null;default:0" json:"completed_tasks"`
+	CompletedAt        *time.Time             `json:"completed_at"`
+	CreatedAt          time.Time              `json:"created_at"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt         `gorm:"index" json:"deleted_at,omitempty"`
+	Tasks              []DailyActivityTask    `gorm:"foreignKey:DailyActivityID" json:"tasks,omitempty"`
+	Comments           []DailyActivityComment `gorm:"foreignKey:DailyActivityID" json:"comments,omitempty"`
+	Logs               []DailyActivityLog     `gorm:"foreignKey:DailyActivityID" json:"logs,omitempty"`
 }
 
 type DailyActivityTask struct {
@@ -151,29 +155,44 @@ type DailyActivityTask struct {
 	DailyActivity   DailyActivity      `gorm:"foreignKey:DailyActivityID" json:"daily_activity,omitempty"`
 	Title           string             `gorm:"size:160;not null" json:"title"`
 	Description     string             `gorm:"type:text" json:"description"`
-	Status          string             `gorm:"size:20;not null;default:'pending'" json:"status"`
-	Priority        string             `gorm:"size:20;not null;default:'medium'" json:"priority"`
-	DueTime         *time.Time         `json:"due_time"`
+	IsCompleted     bool               `gorm:"not null;default:false" json:"is_completed"`
+	CompletedAt     *time.Time         `json:"completed_at"`
+	CreatedBy       uint               `gorm:"not null;index" json:"created_by"`
+	Creator         User               `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
 	UpdatedBy       *uint              `json:"updated_by"`
 	Updater         *User              `gorm:"foreignKey:UpdatedBy" json:"updater,omitempty"`
 	CreatedAt       time.Time          `json:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
-	Logs            []DailyActivityLog `gorm:"foreignKey:DailyActivityTaskID" json:"logs,omitempty"`
+	Logs            []DailyActivityLog `gorm:"foreignKey:TaskID" json:"logs,omitempty"`
+}
+
+type DailyActivityComment struct {
+	ID              uint               `gorm:"primaryKey" json:"id"`
+	DailyActivityID uint               `gorm:"not null;index" json:"daily_activity_id"`
+	DailyActivity   DailyActivity      `gorm:"foreignKey:DailyActivityID" json:"daily_activity,omitempty"`
+	UserID          uint               `gorm:"not null;index" json:"user_id"`
+	User            User               `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Message         string             `gorm:"type:text;not null" json:"message"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+	Logs            []DailyActivityLog `gorm:"foreignKey:CommentID" json:"logs,omitempty"`
 }
 
 type DailyActivityLog struct {
-	ID                  uint               `gorm:"primaryKey" json:"id"`
-	DailyActivityID     *uint              `gorm:"index" json:"daily_activity_id"`
-	DailyActivity       *DailyActivity     `gorm:"foreignKey:DailyActivityID" json:"daily_activity,omitempty"`
-	DailyActivityTaskID *uint              `gorm:"index" json:"daily_activity_task_id"`
-	Task                *DailyActivityTask `gorm:"foreignKey:DailyActivityTaskID" json:"task,omitempty"`
-	UserID              uint               `gorm:"not null;index" json:"user_id"`
-	User                User               `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Action              string             `gorm:"size:60;not null;index" json:"action"`
-	OldValue            string             `gorm:"type:jsonb" json:"old_value,omitempty"`
-	NewValue            string             `gorm:"type:jsonb" json:"new_value,omitempty"`
-	Description         string             `gorm:"type:text;not null" json:"description"`
-	CreatedAt           time.Time          `json:"created_at"`
+	ID              uint                  `gorm:"primaryKey" json:"id"`
+	DailyActivityID *uint                 `gorm:"index" json:"daily_activity_id"`
+	DailyActivity   *DailyActivity        `gorm:"foreignKey:DailyActivityID" json:"daily_activity,omitempty"`
+	TaskID          *uint                 `gorm:"index" json:"task_id"`
+	Task            *DailyActivityTask    `gorm:"foreignKey:TaskID" json:"task,omitempty"`
+	CommentID       *uint                 `gorm:"index" json:"comment_id"`
+	Comment         *DailyActivityComment `gorm:"foreignKey:CommentID" json:"comment,omitempty"`
+	UserID          uint                  `gorm:"not null;index" json:"user_id"`
+	User            User                  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Action          string                `gorm:"size:60;not null;index" json:"action"`
+	OldValue        string                `gorm:"type:jsonb" json:"old_value,omitempty"`
+	NewValue        string                `gorm:"type:jsonb" json:"new_value,omitempty"`
+	Description     string                `gorm:"type:text;not null" json:"description"`
+	CreatedAt       time.Time             `json:"created_at"`
 }
 
 // ============================================================
@@ -227,4 +246,162 @@ type FaceProfile struct {
 	LastVerifiedAt  *time.Time `json:"last_verified_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type Workspace struct {
+	ID          uint              `gorm:"primaryKey" json:"id"`
+	TenantID    uint              `gorm:"not null;default:1;index" json:"tenant_id"`
+	Name        string            `gorm:"size:120;not null" json:"name"`
+	Slug        string            `gorm:"size:140;not null;uniqueIndex" json:"slug"`
+	Description string            `gorm:"type:text" json:"description"`
+	OwnerID     uint              `gorm:"not null;index" json:"owner_id"`
+	Owner       User              `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
+	IsArchived  bool              `gorm:"default:false" json:"is_archived"`
+	Members     []WorkspaceMember `gorm:"foreignKey:WorkspaceID" json:"members,omitempty"`
+	Boards      []Board           `gorm:"foreignKey:WorkspaceID" json:"boards,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+type WorkspaceMember struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	WorkspaceID uint      `gorm:"not null;index" json:"workspace_id"`
+	Workspace   Workspace `gorm:"foreignKey:WorkspaceID" json:"workspace,omitempty"`
+	UserID      uint      `gorm:"not null;index" json:"user_id"`
+	User        User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Role        string    `gorm:"size:30;not null;default:'member'" json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type Board struct {
+	ID          uint          `gorm:"primaryKey" json:"id"`
+	WorkspaceID uint          `gorm:"not null;index" json:"workspace_id"`
+	Workspace   Workspace     `gorm:"foreignKey:WorkspaceID" json:"workspace,omitempty"`
+	Name        string        `gorm:"size:120;not null" json:"name"`
+	Description string        `gorm:"type:text" json:"description"`
+	Visibility  string        `gorm:"size:20;not null;default:'private'" json:"visibility"`
+	Theme       string        `gorm:"size:40;not null;default:'ocean'" json:"theme"`
+	IsFavorite  bool          `gorm:"default:false" json:"is_favorite"`
+	IsArchived  bool          `gorm:"default:false" json:"is_archived"`
+	CreatedBy   uint          `gorm:"not null;index" json:"created_by"`
+	Creator     User          `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Members     []BoardMember `gorm:"foreignKey:BoardID" json:"members,omitempty"`
+	Lists       []BoardList   `gorm:"foreignKey:BoardID" json:"lists,omitempty"`
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
+}
+
+type BoardMember struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	BoardID   uint      `gorm:"not null;index" json:"board_id"`
+	Board     Board     `gorm:"foreignKey:BoardID" json:"board,omitempty"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Role      string    `gorm:"size:30;not null;default:'member'" json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type BoardList struct {
+	ID         uint        `gorm:"primaryKey" json:"id"`
+	BoardID    uint        `gorm:"not null;index" json:"board_id"`
+	Board      Board       `gorm:"foreignKey:BoardID" json:"board,omitempty"`
+	Name       string      `gorm:"size:120;not null" json:"name"`
+	Position   int         `gorm:"not null;default:0" json:"position"`
+	IsArchived bool        `gorm:"default:false" json:"is_archived"`
+	Cards      []BoardCard `gorm:"foreignKey:ListID" json:"cards,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+}
+
+type BoardCard struct {
+	ID                  uint                 `gorm:"primaryKey" json:"id"`
+	BoardID             uint                 `gorm:"not null;index" json:"board_id"`
+	Board               Board                `gorm:"foreignKey:BoardID" json:"board,omitempty"`
+	ListID              uint                 `gorm:"not null;index" json:"list_id"`
+	List                BoardList            `gorm:"foreignKey:ListID" json:"list,omitempty"`
+	Title               string               `gorm:"size:160;not null" json:"title"`
+	Description         string               `gorm:"type:text" json:"description"`
+	MarkdownDescription string               `gorm:"type:text" json:"markdown_description"`
+	CoverImage          string               `json:"cover_image"`
+	DueDate             *time.Time           `json:"due_date"`
+	Priority            string               `gorm:"size:20;not null;default:'medium'" json:"priority"`
+	Position            int                  `gorm:"not null;default:0" json:"position"`
+	IsArchived          bool                 `gorm:"default:false" json:"is_archived"`
+	CreatedBy           uint                 `gorm:"not null;index" json:"created_by"`
+	Creator             User                 `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Members             []BoardCardMember    `gorm:"foreignKey:CardID" json:"members,omitempty"`
+	Labels              []BoardCardLabel     `gorm:"foreignKey:CardID" json:"labels,omitempty"`
+	Checklists          []BoardCardChecklist `gorm:"foreignKey:CardID" json:"checklists,omitempty"`
+	Comments            []BoardCardComment   `gorm:"foreignKey:CardID" json:"comments,omitempty"`
+	CreatedAt           time.Time            `json:"created_at"`
+	UpdatedAt           time.Time            `json:"updated_at"`
+}
+
+type BoardCardMember struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CardID    uint      `gorm:"not null;index" json:"card_id"`
+	Card      BoardCard `gorm:"foreignKey:CardID" json:"card,omitempty"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type BoardCardLabel struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CardID    uint      `gorm:"not null;index" json:"card_id"`
+	Card      BoardCard `gorm:"foreignKey:CardID" json:"card,omitempty"`
+	Name      string    `gorm:"size:80;not null" json:"name"`
+	Color     string    `gorm:"size:20;not null;default:'#06b6d4'" json:"color"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type BoardCardChecklist struct {
+	ID        uint                     `gorm:"primaryKey" json:"id"`
+	CardID    uint                     `gorm:"not null;index" json:"card_id"`
+	Card      BoardCard                `gorm:"foreignKey:CardID" json:"card,omitempty"`
+	Title     string                   `gorm:"size:120;not null" json:"title"`
+	Position  int                      `gorm:"not null;default:0" json:"position"`
+	Items     []BoardCardChecklistItem `gorm:"foreignKey:ChecklistID" json:"items,omitempty"`
+	CreatedAt time.Time                `json:"created_at"`
+	UpdatedAt time.Time                `json:"updated_at"`
+}
+
+type BoardCardChecklistItem struct {
+	ID          uint               `gorm:"primaryKey" json:"id"`
+	ChecklistID uint               `gorm:"not null;index" json:"checklist_id"`
+	Checklist   BoardCardChecklist `gorm:"foreignKey:ChecklistID" json:"checklist,omitempty"`
+	Title       string             `gorm:"size:160;not null" json:"title"`
+	IsCompleted bool               `gorm:"not null;default:false" json:"is_completed"`
+	Position    int                `gorm:"not null;default:0" json:"position"`
+	CompletedAt *time.Time         `json:"completed_at"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+type BoardCardComment struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CardID    uint      `gorm:"not null;index" json:"card_id"`
+	Card      BoardCard `gorm:"foreignKey:CardID" json:"card,omitempty"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Message   string    `gorm:"type:text;not null" json:"message"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type BoardActivity struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	WorkspaceID *uint     `gorm:"index" json:"workspace_id,omitempty"`
+	BoardID     *uint     `gorm:"index" json:"board_id,omitempty"`
+	ListID      *uint     `gorm:"index" json:"list_id,omitempty"`
+	CardID      *uint     `gorm:"index" json:"card_id,omitempty"`
+	UserID      uint      `gorm:"not null;index" json:"user_id"`
+	User        User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Action      string    `gorm:"size:80;not null" json:"action"`
+	Description string    `gorm:"type:text;not null" json:"description"`
+	OldValue    string    `gorm:"type:jsonb" json:"old_value,omitempty"`
+	NewValue    string    `gorm:"type:jsonb" json:"new_value,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
