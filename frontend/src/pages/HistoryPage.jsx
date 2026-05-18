@@ -55,8 +55,8 @@ const HistoryPage = () => {
           {/* Header + filter */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-2xl font-bold text-white">Attendance History</h1>
-              <p className="text-slate-500 text-sm mt-0.5">{history.length} total records</p>
+              <h1 className="font-display text-2xl font-bold text-slate-100">Attendance History</h1>
+              <p className="mt-0.5 text-sm text-slate-400">{history.length} total records</p>
             </div>
           </div>
 

@@ -55,7 +55,7 @@ const LoginPage = () => {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 text-slate-950 text-2xl font-bold mb-4 shadow-lg shadow-cyan-500/25">
             A
           </div>
-          <h1 className="font-display text-3xl font-bold text-white">AttendGuard</h1>
+          <h1 className="font-display text-3xl font-bold text-slate-100">AttendGuard</h1>
           <p className="text-slate-500 text-sm mt-1 font-mono">Fraud-Proof Attendance System</p>
         </div>
 
@@ -70,7 +70,7 @@ const LoginPage = () => {
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 capitalize ${
                   mode === m
                     ? 'bg-slate-700 text-slate-100 shadow'
-                    : 'text-slate-500 hover:text-slate-300'
+                    : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
                 {m}
@@ -88,7 +88,7 @@ const LoginPage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <div>
-                <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase tracking-wider">
+                <label className="mb-1.5 block text-xs font-mono uppercase tracking-wider text-slate-400">
                   Full Name
                 </label>
                 <input
@@ -103,7 +103,7 @@ const LoginPage = () => {
             )}
 
             <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase tracking-wider">
+              <label className="mb-1.5 block text-xs font-mono uppercase tracking-wider text-slate-400">
                 Email
               </label>
               <input
@@ -117,7 +117,7 @@ const LoginPage = () => {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-500 font-mono mb-1.5 uppercase tracking-wider">
+              <label className="mb-1.5 block text-xs font-mono uppercase tracking-wider text-slate-400">
                 Password
               </label>
               <input

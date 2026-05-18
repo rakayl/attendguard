@@ -57,6 +57,7 @@ func main() {
 	geofenceSvc := service.NewGeofenceService(geofenceRepo)
 	faceSvc := service.NewFaceRecognitionService(faceRepo, userRepo)
 	authSvc := service.NewAuthService(userRepo, cfg)
+	profileSvc := service.NewProfileService(userRepo)
 	attendanceSvc := service.NewAttendanceService(attendanceRepo, userRepo, deviceRepo, fraudSvc, geofenceSvc, faceSvc, cfg)
 	deviceSvc := service.NewDeviceService(deviceRepo)
 	adminSvc := service.NewAdminService(attendanceRepo)
@@ -65,9 +66,11 @@ func main() {
 	userMgmtSvc := service.NewUserManagementService(userRepo)
 	dailyActivitySvc := service.NewDailyActivityService(dailyActivityRepo, userRepo)
 	boardSvc := service.NewBoardService(boardRepo, userRepo)
+	teamSvc := service.NewTeamService(boardRepo, userRepo)
 
 	// ── 7. Handlers ───────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc)
+	profileHandler := handler.NewProfileHandler(profileSvc)
 	attendanceHandler := handler.NewAttendanceHandler(attendanceSvc)
 	deviceHandler := handler.NewDeviceHandler(deviceSvc)
 	adminHandler := handler.NewAdminHandler(adminSvc)
@@ -78,6 +81,7 @@ func main() {
 	faceHandler := handler.NewFaceHandler(faceSvc)
 	dailyActivityHandler := handler.NewDailyActivityHandler(dailyActivitySvc, userMgmtSvc)
 	boardHandler := handler.NewBoardHandler(boardSvc, userMgmtSvc)
+	teamHandler := handler.NewTeamHandler(teamSvc, userMgmtSvc)
 
 	// ── 8. Router ─────────────────────────────────────────────────────────────
 	r := gin.Default()
@@ -130,6 +134,8 @@ func main() {
 			}
 			c.JSON(200, gin.H{"user": user, "permissions": user.PermissionNames()})
 		})
+		protected.PUT("/me", profileHandler.UpdateProfile)
+		protected.PUT("/me/password", profileHandler.ChangePassword)
 
 		// Attendance
 		protected.POST("/attendance/check-in", middleware.RequirePermission("attendance:check_in"), attendanceHandler.CheckIn)
@@ -173,8 +179,21 @@ func main() {
 		protected.DELETE("/comments/:id", middleware.RequirePermission("activity:comment"), dailyActivityHandler.DeleteComment)
 
 		// Board management
+		protected.GET("/teams", middleware.RequirePermission("team:view"), teamHandler.List)
+		protected.POST("/teams", middleware.RequirePermission("team:create"), teamHandler.Create)
+		protected.GET("/teams/:id", middleware.RequirePermission("team:view"), teamHandler.Get)
+		protected.PUT("/teams/:id", middleware.RequirePermission("team:update"), teamHandler.Update)
+		protected.DELETE("/teams/:id", middleware.RequirePermission("team:delete"), teamHandler.Delete)
+		protected.GET("/teams/:id/members", middleware.RequirePermission("team:view"), teamHandler.ListMembers)
+		protected.POST("/teams/:id/members", middleware.RequirePermission("team:invite"), teamHandler.InviteMember)
+		protected.DELETE("/teams/:id/members/:memberId", middleware.RequirePermission("team:invite"), teamHandler.RemoveMember)
+		protected.PATCH("/teams/:id/members/:memberId/role", middleware.RequirePermission("team:invite"), teamHandler.UpdateMemberRole)
+		protected.POST("/teams/:id/workspaces", middleware.RequirePermission("team:update"), teamHandler.CreateWorkspace)
+		protected.GET("/teams/:id/workspaces", middleware.RequirePermission("team:view"), teamHandler.ListWorkspaces)
+
 		protected.GET("/workspaces", middleware.RequirePermission("board:view"), boardHandler.ListWorkspaces)
 		protected.POST("/workspaces", middleware.RequirePermission("board:create"), boardHandler.CreateWorkspace)
+		protected.GET("/workspaces/:id/boards", middleware.RequirePermission("board:view"), boardHandler.ListBoardsByWorkspace)
 		protected.POST("/workspaces/:id/boards", middleware.RequirePermission("board:create"), boardHandler.CreateBoard)
 		protected.GET("/boards/:id", middleware.RequirePermission("board:view"), boardHandler.GetBoard)
 		protected.PUT("/boards/:id", middleware.RequirePermission("board:update"), boardHandler.UpdateBoard)

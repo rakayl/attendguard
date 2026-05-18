@@ -41,122 +41,167 @@ const DevicesPage = () => {
 
   const currentDevice = getDeviceInfo()
   const isCurrentRegistered = devices.some((d) => d.device_id === currentDevice.device_id)
-
-  const platformIcon = (p) => ({ android: '🤖', ios: '🍎', web: '🌐' }[p] || '💻')
+  const platformIcon = (platform) => ({ android: 'A', ios: 'I', web: 'W' }[platform] || 'D')
+  const formatDate = (value) =>
+    new Date(value).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 animate-slide-up max-w-2xl">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-white">Registered Devices</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Manage devices allowed to submit attendance. Unknown devices trigger fraud alerts.
-        </p>
-      </div>
-
-      {/* Current device card */}
-      <div className="card p-5 border-cyan-500/20 bg-cyan-500/5">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-xs text-slate-500 font-mono uppercase tracking-wider">Current Device</span>
-          {isCurrentRegistered ? (
-            <span className="badge-safe">✓ Registered</span>
-          ) : (
-            <span className="badge-suspicious">⚠ Unregistered</span>
-          )}
-        </div>
-        <div className="space-y-2 text-xs font-mono">
-          {[
-            ['Device ID', currentDevice.device_id],
-            ['Platform', currentDevice.platform],
-            ['Name', currentDevice.device_name],
-          ].map(([k, v]) => (
-            <div key={k} className="flex justify-between">
-              <span className="text-slate-500">{k}</span>
-              <span className="text-slate-300 truncate max-w-[200px]">{v}</span>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <section className="card px-5 py-6 sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.28em] text-slate-500">Device Security</div>
+            <h1 className="mt-2 font-display text-2xl font-bold text-slate-100 sm:text-3xl">Registered Devices</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Manage devices allowed to submit attendance. Unknown devices trigger fraud alerts.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:w-auto">
+            <div className="rounded-2xl border border-slate-800 bg-slate-800/60 px-4 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Total Devices</div>
+              <div className="mt-1 text-lg font-semibold text-slate-100">{devices.length}</div>
             </div>
-          ))}
+            <div className="rounded-2xl border border-slate-800 bg-slate-800/60 px-4 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Current Status</div>
+              <div className="mt-1 text-lg font-semibold text-slate-100">{isCurrentRegistered ? 'Trusted' : 'Pending'}</div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        {!isCurrentRegistered && (
-          <button
-            onClick={handleRegister}
-            disabled={registering}
-            className="btn-primary w-full mt-4 text-sm"
-          >
-            {registering ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                Registering...
-              </span>
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_1.35fr]">
+        <section className="card border-cyan-500/20 bg-cyan-500/5 p-5 sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Current Device</div>
+              <div className="mt-2 text-lg font-semibold text-slate-100">{currentDevice.device_name}</div>
+              <div className="mt-1 text-xs font-mono uppercase tracking-wider text-slate-500">{currentDevice.platform}</div>
+            </div>
+            {isCurrentRegistered ? (
+              <span className="badge-safe self-start">Registered</span>
             ) : (
-              '+ Register This Device'
+              <span className="badge-suspicious self-start">Unregistered</span>
             )}
-          </button>
-        )}
-
-        {message && (
-          <div className={`mt-3 text-xs px-3 py-2 rounded-lg font-mono ${
-            message.includes('success') ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
-          }`}>
-            {message}
           </div>
-        )}
-      </div>
 
-      {/* Device list */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-semibold text-slate-300">All Registered Devices</span>
-          <button
-            onClick={fetchDevices}
-            disabled={loading}
-            className="text-xs text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
-          >
-            ↻ Refresh
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="card p-8 flex justify-center">
-            <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : devices.length === 0 ? (
-          <div className="card p-8 text-center">
-            <div className="text-2xl mb-2">📱</div>
-            <p className="text-slate-500 text-sm">No devices registered yet</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {devices.map((device) => (
-              <div key={device.id} className="card p-4 flex items-center gap-4">
-                <div className="text-2xl">{platformIcon(device.platform)}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-slate-200 font-medium">{device.device_name || 'Unknown Device'}</div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate">{device.device_id}</div>
-                  <div className="text-[10px] text-slate-600 font-mono mt-0.5">
-                    {new Date(device.created_at).toLocaleDateString('id-ID', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className={device.trusted ? 'badge-safe' : 'badge-suspicious'}>
-                    {device.trusted ? 'Trusted' : 'Pending'}
-                  </span>
-                  <span className="text-[10px] text-slate-600 font-mono capitalize">{device.platform}</span>
-                </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ['Device ID', currentDevice.device_id],
+              ['Platform', currentDevice.platform],
+              ['Name', currentDevice.device_name],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">{label}</div>
+                <div className="mt-2 break-all text-sm font-medium text-slate-200">{value}</div>
               </div>
             ))}
           </div>
-        )}
+
+          {!isCurrentRegistered && (
+            <button
+              onClick={handleRegister}
+              disabled={registering}
+              className="btn-primary mt-5 w-full text-sm sm:w-auto"
+            >
+              {registering ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                  Registering...
+                </span>
+              ) : (
+                'Register This Device'
+              )}
+            </button>
+          )}
+
+          {message && (
+            <div
+              className={`mt-4 rounded-xl px-3 py-2 text-xs font-mono ${
+                message.includes('success') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+              }`}
+            >
+              {message}
+            </div>
+          )}
+        </section>
+
+        <section className="card p-5 sm:p-6">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Registry</div>
+              <div className="mt-1 text-lg font-semibold text-slate-100">All Registered Devices</div>
+            </div>
+            <button onClick={fetchDevices} disabled={loading} className="btn-secondary w-full text-sm sm:w-auto">
+              Refresh
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-10">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+            </div>
+          ) : devices.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 px-6 py-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-800 bg-slate-800/60 text-lg font-bold text-slate-300">
+                D
+              </div>
+              <p className="mt-4 text-sm font-medium text-slate-200">No devices registered yet</p>
+              <p className="mt-1 text-sm text-slate-500">Register your main work device to reduce fraud-score false positives.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {devices.map((device) => (
+                <div
+                  key={device.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4 transition-colors hover:bg-slate-900/55"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-slate-800 bg-slate-800/70 text-sm font-bold text-slate-200">
+                        {platformIcon(device.platform)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-100">{device.device_name || 'Unknown Device'}</div>
+                        <div className="mt-1 break-all text-[11px] font-mono text-slate-500">{device.device_id}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[340px]">
+                      <div className="rounded-xl border border-slate-800 bg-slate-800/50 px-3 py-2">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Added</div>
+                        <div className="mt-1 text-xs font-medium text-slate-200">{formatDate(device.created_at)}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-800/50 px-3 py-2">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Platform</div>
+                        <div className="mt-1 text-xs font-medium capitalize text-slate-200">{device.platform}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-800/50 px-3 py-2">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Status</div>
+                        <div className="mt-1">
+                          <span className={device.trusted ? 'badge-safe' : 'badge-suspicious'}>
+                            {device.trusted ? 'Trusted' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* Info */}
-      <div className="card p-4 border-slate-800">
-        <p className="text-xs text-slate-500 leading-relaxed">
-          <span className="text-slate-400 font-semibold">How it works:</span> When you submit attendance from an unregistered device,
-          the system adds +15 to your fraud score. Register your primary work devices to avoid false positives.
+      <section className="card border-slate-800 p-4 sm:p-5">
+        <p className="text-sm leading-relaxed text-slate-500">
+          <span className="font-semibold text-slate-300">How it works:</span> When you submit attendance from an unregistered
+          device, the system adds +15 to your fraud score. Register your primary work devices to avoid false positives.
         </p>
-      </div>
+      </section>
     </div>
   )
 }

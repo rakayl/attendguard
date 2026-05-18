@@ -8,6 +8,7 @@ import {
   createChecklistItem,
   createWorkspace,
   getBoard,
+  getTeamWorkspaces,
   getWorkspaces,
   moveBoardCard,
   toggleChecklistItem,
@@ -30,30 +31,45 @@ export const useBoardStore = create((set, get) => ({
   memberFilter: '',
   dueFilter: 'all',
   selectedCardId: null,
+  currentTeamId: null,
 
   setSearch: (search) => set({ search }),
   setMemberFilter: (memberFilter) => set({ memberFilter }),
   setDueFilter: (dueFilter) => set({ dueFilter }),
   setSelectedWorkspaceId: (selectedWorkspaceId) => set({ selectedWorkspaceId }),
   setSelectedCardId: (selectedCardId) => set({ selectedCardId }),
+  clearBoardContext: () => set({
+    workspaces: [],
+    selectedWorkspaceId: null,
+    selectedBoardId: null,
+    board: null,
+    loading: false,
+    error: '',
+    selectedCardId: null,
+    currentTeamId: null,
+  }),
 
-  fetchWorkspaces: async () => {
+  fetchWorkspaces: async (teamId = null, preferredWorkspaceId = null, preferredBoardId = null) => {
     set({ loading: true, error: '' })
     try {
-      const res = await getWorkspaces()
-      const workspaces = res.data?.data?.workspaces || []
+      const res = teamId ? await getTeamWorkspaces(teamId) : await getWorkspaces()
+      const workspaces = teamId ? (res.data?.data?.workspaces || []) : (res.data?.data?.workspaces || [])
       const fallbackWorkspaceId = workspaces[0]?.id || null
-      const nextWorkspaceId = get().selectedWorkspaceId || fallbackWorkspaceId
-      const fallbackBoardId = workspaces.find((workspace) => workspace.id === nextWorkspaceId)?.boards?.[0]?.id || workspaces[0]?.boards?.[0]?.id || null
-      const nextBoardId = get().selectedBoardId || fallbackBoardId
+      const nextWorkspaceId = preferredWorkspaceId || get().selectedWorkspaceId || fallbackWorkspaceId
+      const workspaceMatch = workspaces.find((workspace) => workspace.id === nextWorkspaceId) || workspaces[0] || null
+      const fallbackBoardId = workspaceMatch?.boards?.[0]?.id || null
+      const nextBoardId = preferredBoardId || get().selectedBoardId || fallbackBoardId
       set({
         workspaces,
-        selectedWorkspaceId: nextWorkspaceId,
+        selectedWorkspaceId: workspaceMatch?.id || null,
         selectedBoardId: nextBoardId,
+        currentTeamId: teamId,
         loading: false,
       })
       if (nextBoardId) {
         await get().fetchBoard(nextBoardId, false)
+      } else {
+        set({ board: null, selectedCardId: null })
       }
     } catch (err) {
       set({ loading: false, error: normalizeResponseError(err, 'Failed to load workspaces') })
@@ -105,7 +121,7 @@ export const useBoardStore = create((set, get) => ({
       const res = await createBoard(workspaceId, payload)
       const createdBoard = res.data?.data
       set({ saving: false })
-      await get().fetchWorkspaces()
+      await get().fetchWorkspaces(get().currentTeamId, workspaceId, createdBoard?.id || null)
       if (createdBoard?.id) {
         await get().fetchBoard(createdBoard.id)
       }

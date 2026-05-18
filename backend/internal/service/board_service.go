@@ -28,13 +28,21 @@ type BoardUserResource struct {
 
 type WorkspaceResource struct {
 	ID          uint                   `json:"id"`
+	TeamID      *uint                  `json:"team_id,omitempty"`
 	Name        string                 `json:"name"`
 	Slug        string                 `json:"slug"`
 	Description string                 `json:"description"`
 	Owner       BoardUserResource      `json:"owner"`
+	Team        *BoardTeamSummary      `json:"team,omitempty"`
 	Boards      []BoardSummaryResource `json:"boards,omitempty"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+type BoardTeamSummary struct {
+	ID     uint   `json:"id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar"`
 }
 
 type BoardSummaryResource struct {
@@ -206,6 +214,7 @@ type BoardService interface {
 	ListWorkspaces(actor *model.User) ([]WorkspaceResource, error)
 	CreateWorkspace(actor *model.User, req CreateWorkspaceRequest) (*WorkspaceResource, error)
 	CreateBoard(workspaceID uint, actor *model.User, req CreateBoardRequest) (*BoardSummaryResource, error)
+	ListBoardsByWorkspace(workspaceID uint, actor *model.User) ([]BoardSummaryResource, error)
 	GetBoard(boardID uint, actor *model.User) (*BoardDetailResource, error)
 	UpdateBoard(boardID uint, actor *model.User, req UpdateBoardRequest) (*BoardDetailResource, error)
 	CreateList(boardID uint, actor *model.User, req CreateBoardListRequest) (*BoardDetailResource, error)
@@ -286,7 +295,10 @@ func (s *boardService) CreateBoard(workspaceID uint, actor *model.User, req Crea
 	if err != nil {
 		return nil, err
 	}
-	if workspace.OwnerID != actor.ID && !isAdmin(actor) {
+	if workspace.TeamID == nil {
+		return nil, errors.New("workspace must belong to a team before creating a board")
+	}
+	if err := s.ensureWorkspaceWrite(actor, workspace); err != nil {
 		return nil, ErrWorkspaceDenied
 	}
 	board := &model.Board{
@@ -301,6 +313,12 @@ func (s *boardService) CreateBoard(workspaceID uint, actor *model.User, req Crea
 		return nil, err
 	}
 	_ = s.repo.CreateBoardMember(&model.BoardMember{BoardID: board.ID, UserID: actor.ID, Role: "owner"})
+	for _, member := range workspace.Members {
+		if member.UserID == actor.ID {
+			continue
+		}
+		_ = s.repo.CreateBoardMember(&model.BoardMember{BoardID: board.ID, UserID: member.UserID, Role: "member"})
+	}
 	for i, name := range []string{"Backlog", "Todo", "In Progress", "Review", "Done"} {
 		_ = s.repo.CreateList(&model.BoardList{BoardID: board.ID, Name: name, Position: i})
 	}
@@ -309,6 +327,25 @@ func (s *boardService) CreateBoard(workspaceID uint, actor *model.User, req Crea
 		return nil, err
 	}
 	return ptrBoardSummaryResource(toBoardSummaryResource(*fresh)), nil
+}
+
+func (s *boardService) ListBoardsByWorkspace(workspaceID uint, actor *model.User) ([]BoardSummaryResource, error) {
+	workspace, err := s.repo.FindWorkspaceByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureWorkspaceAccess(actor, workspace); err != nil {
+		return nil, err
+	}
+	boards, err := s.repo.FindBoardsByWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]BoardSummaryResource, 0, len(boards))
+	for _, board := range boards {
+		res = append(res, toBoardSummaryResource(board))
+	}
+	return res, nil
 }
 
 func (s *boardService) GetBoard(boardID uint, actor *model.User) (*BoardDetailResource, error) {
@@ -597,6 +634,9 @@ func (s *boardService) CreateComment(cardID uint, actor *model.User, req CreateB
 }
 
 func (s *boardService) ensureBoardAccess(actor *model.User, board *model.Board) error {
+	if board.Workspace.TeamID != nil {
+		return s.ensureWorkspaceAccess(actor, &board.Workspace)
+	}
 	if board.Workspace.OwnerID == actor.ID || board.CreatedBy == actor.ID || isAdmin(actor) {
 		return nil
 	}
@@ -612,6 +652,11 @@ func (s *boardService) ensureBoardAccess(actor *model.User, board *model.Board) 
 }
 
 func (s *boardService) ensureBoardWrite(actor *model.User, board *model.Board) error {
+	if board.Workspace.TeamID != nil {
+		if err := s.ensureWorkspaceAccess(actor, &board.Workspace); err != nil {
+			return err
+		}
+	}
 	if board.Workspace.OwnerID == actor.ID || board.CreatedBy == actor.ID || isAdmin(actor) {
 		return nil
 	}
@@ -628,6 +673,30 @@ func normalizeBoardVisibility(raw string) string {
 		return "public"
 	}
 	return "private"
+}
+
+func (s *boardService) ensureWorkspaceAccess(actor *model.User, workspace *model.Workspace) error {
+	if workspace.OwnerID == actor.ID || isAdmin(actor) {
+		return nil
+	}
+	for _, member := range workspace.Members {
+		if member.UserID == actor.ID {
+			return nil
+		}
+	}
+	return ErrWorkspaceDenied
+}
+
+func (s *boardService) ensureWorkspaceWrite(actor *model.User, workspace *model.Workspace) error {
+	if workspace.OwnerID == actor.ID || isAdmin(actor) {
+		return nil
+	}
+	for _, member := range workspace.Members {
+		if member.UserID == actor.ID && member.Role == "owner" {
+			return nil
+		}
+	}
+	return ErrWorkspaceDenied
 }
 
 func normalizeBoardTheme(raw string) string {
@@ -749,8 +818,9 @@ func toBoardUserResource(user model.User) BoardUserResource {
 }
 
 func toWorkspaceResource(workspace model.Workspace) WorkspaceResource {
-	return WorkspaceResource{
+	resource := WorkspaceResource{
 		ID:          workspace.ID,
+		TeamID:      workspace.TeamID,
 		Name:        workspace.Name,
 		Slug:        workspace.Slug,
 		Description: workspace.Description,
@@ -758,6 +828,14 @@ func toWorkspaceResource(workspace model.Workspace) WorkspaceResource {
 		CreatedAt:   workspace.CreatedAt,
 		UpdatedAt:   workspace.UpdatedAt,
 	}
+	if workspace.Team != nil {
+		resource.Team = &BoardTeamSummary{
+			ID:     workspace.Team.ID,
+			Name:   workspace.Team.Name,
+			Avatar: workspace.Team.Avatar,
+		}
+	}
+	return resource
 }
 
 func toBoardSummaryResource(board model.Board) BoardSummaryResource {

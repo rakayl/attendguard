@@ -209,8 +209,8 @@ const CheckInPage = () => {
     <div className="p-6 lg:p-8 space-y-5 animate-slide-up max-w-2xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="font-display text-2xl font-bold text-white">{isCheckedIn ? 'Check Out' : 'Check In'}</h1>
-        <p className="text-slate-500 text-sm mt-1">GPS & geofence verification required</p>
+        <h1 className="font-display text-2xl font-bold text-slate-100">{isCheckedIn ? 'Check Out' : 'Check In'}</h1>
+        <p className="mt-1 text-sm text-slate-400">GPS & geofence verification required</p>
       </div>
 
       {/* ── Hard Block Alert ─────────────────────────────────────────────── */}
@@ -416,7 +416,7 @@ const CheckInPage = () => {
           'border-emerald-500/30 bg-emerald-500/5'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="font-display font-semibold text-white">Attendance Recorded</span>
+            <span className="font-display font-semibold text-slate-100">Attendance Recorded</span>
             <FraudBadge status={result.fraud_status} />
           </div>
           <FraudScore score={result.fraud_score} status={result.fraud_status} />

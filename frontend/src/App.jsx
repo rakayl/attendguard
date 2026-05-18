@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -13,9 +13,11 @@ import RolesPage from './pages/RolesPage'
 import PermissionsPage from './pages/PermissionsPage'
 import GeofencePage from './pages/GeofencePage'
 import FaceManagementPage from './pages/FaceManagementPage'
+import ProfilePage from './pages/ProfilePage'
 import DailyActivityPage from './pages/DailyActivityPage'
 import DailyActivityCalendarPage from './pages/DailyActivityCalendarPage'
 import BoardManagementPage from './pages/BoardManagementPage'
+import TeamManagementPage from './pages/TeamManagementPage'
 import { useAuthStore } from './store/authStore'
 
 const RequireAuth = ({ children }) => {
@@ -30,6 +32,16 @@ const RequirePermission = ({ perm, children }) => {
   return children
 }
 
+const RequireBoardContext = ({ children }) => {
+  const [searchParams] = useSearchParams()
+  const teamId = searchParams.get('teamId')
+  const workspaceId = searchParams.get('workspaceId')
+  if (!teamId || !workspaceId) {
+    return <Navigate to="/teams" replace />
+  }
+  return children
+}
+
 const App = () => (
   <BrowserRouter>
     <Routes>
@@ -38,12 +50,14 @@ const App = () => (
       <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="teams" element={<RequirePermission perm="team:view"><TeamManagementPage /></RequirePermission>} />
         <Route path="activities" element={<RequirePermission perm="activity:view"><DailyActivityPage /></RequirePermission>} />
         <Route path="activities/calendar" element={<RequirePermission perm="activity:view"><DailyActivityCalendarPage /></RequirePermission>} />
-        <Route path="boards" element={<RequirePermission perm="board:view"><BoardManagementPage /></RequirePermission>} />
+        <Route path="boards" element={<RequirePermission perm="board:view"><RequireBoardContext><BoardManagementPage /></RequireBoardContext></RequirePermission>} />
         <Route path="checkin" element={<CheckInPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="devices" element={<DevicesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
 
         {/* Monitoring */}
         <Route path="admin" element={<RequirePermission perm="attendance:view_all"><AdminPage /></RequirePermission>} />

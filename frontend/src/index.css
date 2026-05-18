@@ -2,14 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg: #0f172a;
+  --color-bg-muted: #111827;
+  --color-surface: #111827;
+  --color-surface-muted: #1f2937;
+  --color-surface-elevated: #0b1220;
+  --color-border: #1f2937;
+  --color-border-strong: #334155;
+  --color-text: #f8fafc;
+  --color-text-soft: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-primary: #22d3ee;
+  --color-primary-hover: #06b6d4;
+  --color-primary-text: #ffffff;
+  --color-danger-bg: rgba(239, 68, 68, 0.12);
+  --color-danger-border: rgba(239, 68, 68, 0.3);
+  --color-danger-text: #f87171;
+  --scroll-track: #111827;
+  --scroll-thumb: #334155;
+  --scroll-thumb-hover: #475569;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 font-sans;
+    background: var(--color-bg);
+    color: var(--color-text);
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    transition: background-color 0.25s ease, color 0.25s ease;
+    overflow-x: hidden;
+    @apply font-sans;
+  }
+
+  #root {
+    min-height: 100vh;
+    overflow-x: hidden;
   }
 
   ::-webkit-scrollbar {
@@ -18,63 +49,187 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-slate-900;
+    background: var(--scroll-track);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-700 rounded-full;
+    background: var(--scroll-thumb);
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500;
+    background: var(--scroll-thumb-hover);
   }
 }
 
 @layer components {
   .card {
-    @apply bg-slate-900 border border-slate-800 rounded-2xl;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+    @apply rounded-2xl;
   }
 
   .btn-primary {
-    @apply bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    @apply font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .btn-primary:hover {
+    background: var(--color-primary-hover);
   }
 
   .btn-secondary {
-    @apply bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium px-5 py-2.5 rounded-xl transition-all duration-200 border border-slate-700 active:scale-95;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text);
+    @apply font-medium px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95;
+  }
+
+  .btn-secondary:hover {
+    filter: brightness(0.985);
   }
 
   .btn-danger {
-    @apply bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium px-5 py-2.5 rounded-xl transition-all duration-200 border border-red-500/30 active:scale-95;
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger-text);
+    @apply font-medium px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95;
+  }
+
+  .btn-danger:hover {
+    filter: brightness(1.08);
   }
 
   .input-field {
-    @apply bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 w-full focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 transition-all duration-200;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text);
+    @apply rounded-xl px-4 py-3 w-full transition-all duration-200;
+  }
+
+  .input-field::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
   }
 
   .badge-safe {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30;
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
 
   .badge-suspicious {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30;
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
   }
 
   .badge-fraud {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30;
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-all duration-200 font-medium cursor-pointer;
+    color: var(--color-text-muted);
+    @apply flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-medium cursor-pointer;
+  }
+
+  .nav-item:hover {
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    color: var(--color-primary);
   }
 
   .nav-item.active {
-    @apply text-cyan-400 bg-cyan-500/10 border border-cyan-500/20;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 10%, transparent);
   }
+}
+
+body .bg-slate-950 {
+  background-color: var(--color-bg) !important;
+}
+
+body .bg-slate-900 {
+  background-color: var(--color-surface) !important;
+}
+
+body .bg-slate-800 {
+  background-color: var(--color-surface-muted) !important;
+}
+
+body .border-slate-800 {
+  border-color: var(--color-border) !important;
+}
+
+body .border-slate-700 {
+  border-color: var(--color-border-strong) !important;
+}
+
+body .text-slate-100,
+body .text-slate-200 {
+  color: var(--color-text) !important;
+}
+
+body .text-slate-300,
+body .text-slate-400 {
+  color: var(--color-text-soft) !important;
+}
+
+body .text-slate-500 {
+  color: var(--color-text-muted) !important;
+}
+
+body .text-slate-600 {
+  color: #64748b !important;
+}
+
+body .hover\:bg-slate-900\/80:hover,
+body .hover\:bg-slate-900\/70:hover,
+body .hover\:bg-slate-900:hover {
+  background-color: color-mix(in srgb, var(--color-surface-muted) 90%, transparent) !important;
+}
+
+body .hover\:bg-slate-800:hover,
+body .hover\:bg-slate-700:hover {
+  background-color: color-mix(in srgb, var(--color-surface-muted) 100%, transparent) !important;
+}
+
+body .bg-black\/75,
+body .bg-black\/70,
+body .bg-black\/60 {
+  background-color: rgba(2, 6, 23, 0.72) !important;
+}
+
+body .text-white {
+  color: #ffffff !important;
+}
+
+body .text-white\/80 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body .text-white\/70,
+body .text-white\/60 {
+  color: rgba(255, 255, 255, 0.72) !important;
 }
 
 /* Leaflet map fixes */
 .leaflet-container {
-  background: #0f172a !important;
+  background: var(--color-surface-elevated) !important;
   border-radius: 12px;
   z-index: 0;
 }
@@ -83,25 +238,22 @@
   display: none;
 }
 
-/* Animated gradient border */
 .gradient-border {
   position: relative;
-  background: linear-gradient(#0f172a, #0f172a) padding-box,
-    linear-gradient(135deg, #06b6d4, #6366f1) border-box;
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box,
+    linear-gradient(135deg, var(--color-primary), #3b82f6) border-box;
   border: 1px solid transparent;
   border-radius: 16px;
 }
 
-/* Glow effects */
 .glow-cyan {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
 
 .glow-red {
   box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
 }
 
-/* Score bar animation */
 @keyframes fillBar {
   from { width: 0%; }
 }
@@ -110,7 +262,6 @@
   animation: fillBar 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Pulse dot */
 .pulse-dot::before {
   content: '';
   position: absolute;

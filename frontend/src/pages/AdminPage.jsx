@@ -38,8 +38,8 @@ const AdminPage = () => {
   return (
     <div className="p-6 lg:p-8 space-y-6 animate-slide-up">
       <div>
-        <h1 className="font-display text-2xl font-bold text-white">All Attendance</h1>
-        <p className="text-slate-500 text-sm mt-1">Monitor all employee attendance records</p>
+        <h1 className="font-display text-2xl font-bold text-slate-100">All Attendance</h1>
+        <p className="mt-1 text-sm text-slate-400">Monitor all employee attendance records</p>
       </div>
 
       {/* Stats row */}

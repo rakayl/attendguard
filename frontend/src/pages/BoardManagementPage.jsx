@@ -1,36 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBoardStore } from '../store/boardStore'
 import { useAuthStore } from '../store/authStore'
-
-const WorkspaceModal = ({ onClose, onSave, saving }) => {
-  const [form, setForm] = useState({ name: '', description: '' })
-  const [error, setError] = useState('')
-
-  const submit = async (event) => {
-    event.preventDefault()
-    setError('')
-    try {
-      await onSave(form)
-      onClose()
-    } catch (err) {
-      setError(err.message || 'Failed to create workspace')
-    }
-  }
-
-  return (
-    <ModalShell title="Create Workspace" subtitle="Group boards by team, product, or department." onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 px-6 py-5">
-        {error && <AlertError>{error}</AlertError>}
-        <input className="input-field" placeholder="Workspace name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <textarea className="input-field min-h-24 resize-y" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        <div className="flex gap-3">
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
-        </div>
-      </form>
-    </ModalShell>
-  )
-}
 
 const BoardModal = ({ workspaceId, onClose, onSave, saving }) => {
   const [form, setForm] = useState({ name: '', description: '', visibility: 'private', theme: 'ocean' })
@@ -49,7 +20,7 @@ const BoardModal = ({ workspaceId, onClose, onSave, saving }) => {
 
   return (
     <ModalShell title="Create Board" subtitle="Create a new kanban board inside the selected workspace." onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 px-6 py-5">
+      <form onSubmit={submit} className="space-y-4 px-5 py-5 sm:px-6">
         {error && <AlertError>{error}</AlertError>}
         <input className="input-field" placeholder="Board name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <textarea className="input-field min-h-24 resize-y" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -65,7 +36,7 @@ const BoardModal = ({ workspaceId, onClose, onSave, saving }) => {
             <option value="graphite">Graphite</option>
           </select>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : 'Create Board'}</button>
         </div>
@@ -117,7 +88,7 @@ const CardModal = ({ listId, card, boardMembers, onClose, onSave, saving }) => {
 
   return (
     <ModalShell title={card ? 'Edit Card' : 'Create Card'} subtitle="Capture the task, owner, labels, and delivery date." onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 px-6 py-5">
+      <form onSubmit={submit} className="space-y-4 px-5 py-5 sm:px-6">
         {error && <AlertError>{error}</AlertError>}
         <input className="input-field" placeholder="Card title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <textarea className="input-field min-h-24 resize-y" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -159,7 +130,7 @@ const CardModal = ({ listId, card, boardMembers, onClose, onSave, saving }) => {
             })}
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? 'Saving...' : 'Save Card'}</button>
         </div>
@@ -169,9 +140,9 @@ const CardModal = ({ listId, card, boardMembers, onClose, onSave, saving }) => {
 }
 
 const ModalShell = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-    <div className="card max-h-[90vh] w-full max-w-3xl overflow-y-auto animate-slide-up">
-      <div className="flex items-start justify-between border-b border-slate-800 px-6 py-5">
+  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+    <div className="card max-h-[92vh] w-full max-w-3xl overflow-y-auto animate-slide-up">
+      <div className="flex items-start justify-between border-b border-slate-800 px-5 py-5 sm:px-6">
         <div>
           <h2 className="font-display text-xl font-bold text-white">{title}</h2>
           {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
@@ -196,6 +167,12 @@ const priorityStyles = {
 
 const BoardManagementPage = () => {
   const { user, can } = useAuthStore()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const teamIdParam = searchParams.get('teamId')
+  const workspaceIdParam = Number(searchParams.get('workspaceId') || 0)
+  const boardIdParam = Number(searchParams.get('boardId') || 0)
+
   const {
     workspaces,
     selectedWorkspaceId,
@@ -213,10 +190,10 @@ const BoardManagementPage = () => {
     setDueFilter,
     setSelectedWorkspaceId,
     setSelectedCardId,
+    clearBoardContext,
     fetchWorkspaces,
     fetchBoard,
     selectBoard,
-    createWorkspace,
     createBoard,
     createList,
     createCard,
@@ -228,7 +205,6 @@ const BoardManagementPage = () => {
     createComment,
   } = useBoardStore()
 
-  const [workspaceModal, setWorkspaceModal] = useState(false)
   const [boardModal, setBoardModal] = useState(false)
   const [cardModal, setCardModal] = useState(null)
   const [newListName, setNewListName] = useState('')
@@ -242,8 +218,12 @@ const BoardManagementPage = () => {
   const canCommentCards = can('board:comment')
 
   useEffect(() => {
-    fetchWorkspaces()
-  }, [])
+    if (!teamIdParam || !workspaceIdParam) {
+      clearBoardContext()
+      return
+    }
+    fetchWorkspaces(teamIdParam, workspaceIdParam, boardIdParam || null).catch(() => {})
+  }, [teamIdParam, workspaceIdParam, boardIdParam])
 
   useEffect(() => {
     if (!selectedBoardId) return
@@ -254,8 +234,8 @@ const BoardManagementPage = () => {
   }, [selectedBoardId])
 
   const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || workspaces[0] || null,
-    [workspaces, selectedWorkspaceId]
+    () => workspaces.find((workspace) => workspace.id === workspaceIdParam) || workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
+    [workspaces, workspaceIdParam, selectedWorkspaceId]
   )
 
   const boards = selectedWorkspace?.boards || []
@@ -288,6 +268,21 @@ const BoardManagementPage = () => {
 
   const boardMembers = board?.members || []
 
+  const handleWorkspaceChange = (nextWorkspaceId) => {
+    const nextWorkspace = workspaces.find((workspace) => workspace.id === nextWorkspaceId)
+    const nextBoardId = nextWorkspace?.boards?.[0]?.id || ''
+    setSelectedWorkspaceId(nextWorkspaceId)
+    navigate(`/boards?teamId=${teamIdParam}&workspaceId=${nextWorkspaceId}${nextBoardId ? `&boardId=${nextBoardId}` : ''}`)
+    if (nextBoardId) {
+      selectBoard(nextBoardId)
+    }
+  }
+
+  const handleBoardSelect = (nextBoardId) => {
+    navigate(`/boards?teamId=${teamIdParam}&workspaceId=${selectedWorkspace?.id}&boardId=${nextBoardId}`)
+    selectBoard(nextBoardId)
+  }
+
   const handleCreateList = async () => {
     if (!newListName.trim() || !board?.id) return
     await createList(board.id, { name: newListName.trim() })
@@ -306,7 +301,8 @@ const BoardManagementPage = () => {
     event.preventDefault()
     const cardId = Number(event.dataTransfer.getData('text/plain') || draggingCardId)
     if (!cardId) return
-    const list = (board?.lists || []).find((entry) => entry.id === listId)
+    const sourceBoard = board?.lists || []
+    const list = sourceBoard.find((entry) => entry.id === listId)
     const position = list?.cards?.length || 0
     setDraggingCardId(null)
     await moveCard(cardId, { list_id: listId, position })
@@ -331,19 +327,54 @@ const BoardManagementPage = () => {
     setCommentDraft('')
   }
 
+  if (!teamIdParam || !workspaceIdParam) {
+    return (
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+        <div className="card p-6 sm:p-8">
+          <div className="max-w-2xl space-y-3">
+            <div className="text-xs font-mono uppercase tracking-widest text-slate-500">Board Access</div>
+            <h1 className="font-display text-2xl font-bold text-white">Open boards from Team and Workspace</h1>
+            <p className="text-sm text-slate-400">Board tidak bisa diakses langsung dari menu global. Masuk ke Team lalu pilih Workspace untuk membuka board yang Anda miliki aksesnya.</p>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <Link to="/teams" className="btn-primary text-center text-sm">Go to Teams</Link>
+              <Link to="/dashboard" className="btn-secondary text-center text-sm">Back to Dashboard</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!loading && !selectedWorkspace) {
+    return (
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+        <div className="card p-6 sm:p-8">
+          <div className="max-w-2xl space-y-3">
+            <div className="text-xs font-mono uppercase tracking-widest text-slate-500">Unauthorized Workspace</div>
+            <h1 className="font-display text-2xl font-bold text-white">Workspace tidak ditemukan atau tidak bisa diakses</h1>
+            <p className="text-sm text-slate-400">Pastikan board dibuka dari Team yang benar. Jika Anda baru ditambahkan ke team, refresh lalu buka lagi dari halaman Teams.</p>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <Link to="/teams" className="btn-primary text-center text-sm">Back to Teams</Link>
+              <Link to="/dashboard" className="btn-secondary text-center text-sm">Back to Dashboard</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="p-6 lg:p-8 space-y-6 animate-slide-up">
-      {workspaceModal && <WorkspaceModal onClose={() => setWorkspaceModal(false)} onSave={createWorkspace} saving={saving} />}
+    <div className="animate-slide-up space-y-6 p-4 sm:p-6 lg:p-8">
       {boardModal && <BoardModal workspaceId={selectedWorkspace?.id} onClose={() => setBoardModal(false)} onSave={createBoard} saving={saving} />}
       {cardModal && <CardModal listId={cardModal.listId} card={cardModal.card} boardMembers={boardMembers} onClose={() => setCardModal(null)} onSave={handleSaveCard} saving={saving} />}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-white">Board Management</h1>
-          <p className="mt-1 text-sm text-slate-500">Kanban workspace dengan board, column, card, checklist, comment, activity log, dan drag antar column.</p>
+          <p className="mt-1 text-sm text-slate-500">Board dibuka melalui Team dan Workspace agar akses tetap aman dan alur kerja lebih rapi.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canCreateBoards && <button className="btn-secondary text-sm" onClick={() => setWorkspaceModal(true)}>+ Workspace</button>}
+          <Link to="/teams" className="btn-secondary text-sm">Back to Teams</Link>
           {canCreateBoards && selectedWorkspace && <button className="btn-primary text-sm" onClick={() => setBoardModal(true)}>+ Board</button>}
         </div>
       </div>
@@ -351,20 +382,13 @@ const BoardManagementPage = () => {
       {error && <AlertError>{error}</AlertError>}
 
       <div className="grid gap-6 2xl:grid-cols-[300px_minmax(0,1fr)_380px]">
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <div className="card p-4">
             <div className="mb-3 text-xs font-mono uppercase tracking-widest text-slate-500">Workspace</div>
             <select
               className="input-field"
               value={selectedWorkspace?.id || ''}
-              onChange={(e) => {
-                const nextWorkspaceId = Number(e.target.value)
-                setSelectedWorkspaceId(nextWorkspaceId)
-                const nextBoardId = workspaces.find((workspace) => workspace.id === nextWorkspaceId)?.boards?.[0]?.id
-                if (nextBoardId) {
-                  selectBoard(nextBoardId)
-                }
-              }}
+              onChange={(e) => handleWorkspaceChange(Number(e.target.value))}
             >
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
@@ -372,7 +396,7 @@ const BoardManagementPage = () => {
             </select>
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
               <div className="text-sm font-semibold text-slate-100">{selectedWorkspace?.name || 'No workspace yet'}</div>
-              <p className="mt-1 text-sm text-slate-500">{selectedWorkspace?.description || 'Create a workspace to start organizing boards.'}</p>
+              <p className="mt-1 text-sm text-slate-500">{selectedWorkspace?.description || 'Select a workspace from your team.'}</p>
             </div>
           </div>
 
@@ -385,7 +409,7 @@ const BoardManagementPage = () => {
               {boards.map((entry) => (
                 <button
                   key={entry.id}
-                  onClick={() => selectBoard(entry.id)}
+                  onClick={() => handleBoardSelect(entry.id)}
                   className={`w-full rounded-2xl border p-4 text-left transition-colors ${entry.id === selectedBoardId ? 'border-cyan-500/30 bg-cyan-500/10' : 'border-slate-800 bg-slate-950/60 hover:bg-slate-900/80'}`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -393,7 +417,7 @@ const BoardManagementPage = () => {
                       <div className="font-semibold text-slate-100">{entry.name}</div>
                       <div className="mt-1 text-xs text-slate-500">{entry.visibility} board</div>
                     </div>
-                    {entry.is_favorite && <span className="text-amber-300">★</span>}
+                    {entry.is_favorite && <span className="text-amber-300">*</span>}
                   </div>
                   <p className="mt-2 line-clamp-2 text-sm text-slate-400">{entry.description || 'No description yet.'}</p>
                 </button>
@@ -403,15 +427,15 @@ const BoardManagementPage = () => {
           </div>
         </aside>
 
-        <section className="space-y-4 min-w-0">
+        <section className="min-w-0 space-y-4">
           <div className="card overflow-hidden">
             <div className={`relative p-5 ${themeClass(board?.theme)}`}>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_42%)]" />
               <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs font-mono uppercase tracking-widest text-white/70">{board?.visibility || 'private'} board</div>
                   <h2 className="mt-1 font-display text-2xl font-bold text-white">{board?.name || 'Select a board'}</h2>
-                  <p className="mt-2 max-w-3xl text-sm text-white/80">{board?.description || 'Choose a board from the left sidebar to start managing work.'}</p>
+                  <p className="mt-2 max-w-3xl text-sm text-white/80">{board?.description || 'Choose a board from the left panel to start managing work.'}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-white sm:grid-cols-4">
                   {[
@@ -452,12 +476,12 @@ const BoardManagementPage = () => {
             {filteredLists.map((list) => (
               <div
                 key={list.id}
-                className="card flex w-[320px] flex-shrink-0 flex-col p-4"
+                className="card flex w-[300px] flex-shrink-0 flex-col p-4 sm:w-[320px]"
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDrop(event, list.id)}
               >
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-semibold text-slate-100">{list.name}</div>
                     <div className="text-xs text-slate-500">{list.cards.length} cards</div>
                   </div>
@@ -508,7 +532,7 @@ const BoardManagementPage = () => {
                             <div className="h-full bg-cyan-400 transition-all" style={{ width: `${completion}%` }} />
                           </div>
                         </div>
-                        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+                        <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500">
                           <span>{card.comments?.length || 0} comments</span>
                           <span>{card.due_date ? formatShortDate(card.due_date) : 'No due date'}</span>
                         </div>
@@ -530,10 +554,10 @@ const BoardManagementPage = () => {
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <div className="card p-5">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs font-mono uppercase tracking-widest text-slate-500">Card Detail</div>
                 <div className="mt-1 font-display text-lg font-semibold text-white">{selectedCard?.title || 'Choose a card'}</div>
               </div>
@@ -549,7 +573,7 @@ const BoardManagementPage = () => {
                     <span key={member.id} className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">{member.name}</span>
                   ))}
                 </div>
-                <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedCard.description || selectedCard.markdown_description || 'No card detail provided.'}</p>
+                <p className="whitespace-pre-wrap text-sm text-slate-300">{selectedCard.description || selectedCard.markdown_description || 'No card detail provided.'}</p>
                 {selectedCard.markdown_description && (
                   <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                     <div className="mb-2 text-xs font-mono uppercase tracking-widest text-slate-500">Rich Notes</div>
@@ -593,7 +617,7 @@ const BoardManagementPage = () => {
                       ))}
                     </div>
                     {canUpdateBoards && (
-                      <div className="mt-3 flex gap-2">
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <input
                           className="input-field flex-1"
                           placeholder="New checklist item"
@@ -609,7 +633,7 @@ const BoardManagementPage = () => {
                 {canUpdateBoards && (
                   <div className="rounded-2xl border border-dashed border-slate-700 p-4">
                     <div className="mb-2 text-sm font-medium text-slate-200">Add checklist</div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <input className="input-field flex-1" placeholder="Checklist title" value={checklistTitle} onChange={(e) => setChecklistTitle(e.target.value)} />
                       <button className="btn-primary px-4 text-sm" onClick={handleCreateChecklist} disabled={!checklistTitle.trim()}>Create</button>
                     </div>
@@ -632,7 +656,7 @@ const BoardManagementPage = () => {
                   <div key={comment.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                     <div className="text-sm font-medium text-slate-100">{comment.user?.name}</div>
                     <div className="mt-1 whitespace-pre-wrap text-sm text-slate-400">{comment.message}</div>
-                    <div className="mt-2 text-xs text-slate-500">{new Date(comment.updated_at || comment.created_at).toLocaleString()}</div>
+                    <div className="mt-2 text-xs text-slate-500">{comment.user?.name} / {new Date(comment.updated_at || comment.created_at).toLocaleString()}</div>
                   </div>
                 ))}
                 {canCommentCards && (
@@ -654,7 +678,7 @@ const BoardManagementPage = () => {
               {(board?.activities || []).map((activity) => (
                 <div key={activity.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                   <div className="text-sm font-medium text-slate-100">{activity.description}</div>
-                  <div className="mt-1 text-xs text-slate-500">{activity.user?.name} | {new Date(activity.created_at).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-slate-500">{activity.user?.name} / {new Date(activity.created_at).toLocaleString()}</div>
                 </div>
               ))}
               {!board?.activities?.length && <div className="text-sm text-slate-500">No activity logged yet.</div>}

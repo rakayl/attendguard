@@ -7,6 +7,12 @@ export const login = (email, password) =>
 export const register = (name, email, password) =>
   api.post('/auth/register', { name, email, password })
 
+export const updateMyProfile = (payload) =>
+  api.put('/me', payload)
+
+export const changeMyPassword = (payload) =>
+  api.put('/me/password', payload)
+
 // Attendance
 export const checkIn = (payload) =>
   api.post('/attendance/check-in', payload)
@@ -100,8 +106,44 @@ export const deleteComment = (id) =>
   api.delete(`/comments/${id}`)
 
 // Board management
+export const getTeams = () =>
+  api.get('/teams')
+
+export const getTeam = (id) =>
+  api.get(`/teams/${id}`)
+
+export const createTeam = (payload) =>
+  api.post('/teams', payload)
+
+export const updateTeam = (id, payload) =>
+  api.put(`/teams/${id}`, payload)
+
+export const deleteTeam = (id) =>
+  api.delete(`/teams/${id}`)
+
+export const getTeamMembers = (id) =>
+  api.get(`/teams/${id}/members`)
+
+export const inviteTeamMember = (id, payload) =>
+  api.post(`/teams/${id}/members`, payload)
+
+export const removeTeamMember = (teamId, memberId) =>
+  api.delete(`/teams/${teamId}/members/${memberId}`)
+
+export const updateTeamMemberRole = (teamId, memberId, payload) =>
+  api.patch(`/teams/${teamId}/members/${memberId}/role`, payload)
+
+export const getTeamWorkspaces = (id) =>
+  api.get(`/teams/${id}/workspaces`)
+
+export const createTeamWorkspace = (id, payload) =>
+  api.post(`/teams/${id}/workspaces`, payload)
+
 export const getWorkspaces = () =>
   api.get('/workspaces')
+
+export const getWorkspaceBoards = (id) =>
+  api.get(`/workspaces/${id}/boards`)
 
 export const createWorkspace = (payload) =>
   api.post('/workspaces', payload)

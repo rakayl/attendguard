@@ -26,14 +26,14 @@ const FraudMonitorPage = () => {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-2xl font-bold text-white">Fraud Monitor</h1>
+          <h1 className="font-display text-2xl font-bold text-slate-100">Fraud Monitor</h1>
           {fraudAttendance.length > 0 && (
             <span className="px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 text-xs font-bold border border-red-500/30 font-mono">
               {fraudAttendance.length} alerts
             </span>
           )}
         </div>
-        <p className="text-slate-500 text-sm mt-1">
+        <p className="mt-1 text-sm text-slate-400">
           Real-time view of suspicious and fraudulent attendance records
         </p>
       </div>

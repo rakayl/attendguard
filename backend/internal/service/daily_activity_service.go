@@ -52,20 +52,20 @@ type DailyActivityCalendarDayResource struct {
 }
 
 type CreateDailyActivityRequest struct {
-	Title        string `json:"title" binding:"required,max=120"`
-	Description  string `json:"description" binding:"max=2000"`
+	Title         string `json:"title" binding:"required,max=120"`
+	Description   string `json:"description" binding:"max=2000"`
 	TemplateColor string `json:"template_color"`
-	AssignedTo   uint   `json:"assigned_to" binding:"required"`
-	ActivityDate string `json:"activity_date" binding:"required"`
+	AssignedTo    uint   `json:"assigned_to" binding:"required"`
+	ActivityDate  string `json:"activity_date" binding:"required"`
 }
 
 type UpdateDailyActivityRequest struct {
-	Title        string `json:"title" binding:"required,max=120"`
-	Description  string `json:"description" binding:"max=2000"`
+	Title         string `json:"title" binding:"required,max=120"`
+	Description   string `json:"description" binding:"max=2000"`
 	TemplateColor string `json:"template_color"`
-	AssignedTo   uint   `json:"assigned_to" binding:"required"`
-	ActivityDate string `json:"activity_date" binding:"required"`
-	Status       string `json:"status"`
+	AssignedTo    uint   `json:"assigned_to" binding:"required"`
+	ActivityDate  string `json:"activity_date" binding:"required"`
+	Status        string `json:"status"`
 }
 
 type CreateDailyActivityTaskRequest struct {
@@ -221,7 +221,8 @@ func (s *dailyActivityService) GetByID(id uint, actor *model.User) (*DailyActivi
 }
 
 func (s *dailyActivityService) Create(actor *model.User, req CreateDailyActivityRequest) (*DailyActivityResource, error) {
-	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, req.AssignedTo, req.ActivityDate)
+	resolvedAssignedTo := resolveAssignedTo(actor, req.AssignedTo)
+	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, resolvedAssignedTo, req.ActivityDate)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +265,8 @@ func (s *dailyActivityService) Create(actor *model.User, req CreateDailyActivity
 }
 
 func (s *dailyActivityService) Update(id uint, actor *model.User, req UpdateDailyActivityRequest) (*DailyActivityResource, error) {
-	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, req.AssignedTo, req.ActivityDate)
+	resolvedAssignedTo := resolveAssignedTo(actor, req.AssignedTo)
+	title, description, templateColor, assignedTo, activityDate, err := validateActivityInput(req.Title, req.Description, req.TemplateColor, resolvedAssignedTo, req.ActivityDate)
 	if err != nil {
 		return nil, err
 	}
@@ -797,6 +799,13 @@ func normalizeActivityTemplateColor(raw string) string {
 	default:
 		return "cyan"
 	}
+}
+
+func resolveAssignedTo(actor *model.User, requested uint) uint {
+	if isEmployee(actor) {
+		return actor.ID
+	}
+	return requested
 }
 
 func (s *dailyActivityService) ensureAssignableUser(tenantID, userID uint) error {

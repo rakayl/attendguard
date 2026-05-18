@@ -10,37 +10,61 @@ import (
 )
 
 type fakeBoardRepo struct {
-	card              *model.BoardCard
-	targetList        *model.BoardList
-	board             *model.Board
-	activities        []model.BoardActivity
-	moveCalled        bool
-	moveSourceListID  uint
-	moveTargetListID  uint
-	moveSourcePos     int
-	moveTargetPos     int
-	updateCardCalled  bool
-	targetListErr     error
+	team             *model.Team
+	teamMembers      []model.TeamMember
+	card             *model.BoardCard
+	targetList       *model.BoardList
+	board            *model.Board
+	activities       []model.BoardActivity
+	moveCalled       bool
+	moveSourceListID uint
+	moveTargetListID uint
+	moveSourcePos    int
+	moveTargetPos    int
+	updateCardCalled bool
+	targetListErr    error
 }
 
 func (f *fakeBoardRepo) WithTransaction(fn func(repo repository.BoardRepository) error) error {
 	return fn(f)
 }
 
+func (f *fakeBoardRepo) CreateTeam(team *model.Team) error { return nil }
+func (f *fakeBoardRepo) UpdateTeam(team *model.Team) error { return nil }
+func (f *fakeBoardRepo) FindTeamByID(id uint) (*model.Team, error) {
+	return nil, errors.New("team not found")
+}
+func (f *fakeBoardRepo) FindTeamsByUser(userID, tenantID uint) ([]model.Team, error) { return nil, nil }
+func (f *fakeBoardRepo) CreateTeamMember(member *model.TeamMember) error             { return nil }
+func (f *fakeBoardRepo) UpdateTeamMember(member *model.TeamMember) error             { return nil }
+func (f *fakeBoardRepo) FindTeamMemberByID(id uint) (*model.TeamMember, error) {
+	return nil, errors.New("team member not found")
+}
+func (f *fakeBoardRepo) FindTeamMember(teamID, userID uint) (*model.TeamMember, error) {
+	return nil, errors.New("team member not found")
+}
+func (f *fakeBoardRepo) FindTeamMembers(teamID uint) ([]model.TeamMember, error) { return nil, nil }
+func (f *fakeBoardRepo) FindJoinedTeamMembers(teamID uint) ([]model.TeamMember, error) {
+	return nil, nil
+}
+func (f *fakeBoardRepo) DeleteTeamMember(id uint) error                   { return nil }
 func (f *fakeBoardRepo) CreateWorkspace(workspace *model.Workspace) error { return nil }
 func (f *fakeBoardRepo) CreateWorkspaceMember(member *model.WorkspaceMember) error {
 	return nil
 }
-func (f *fakeBoardRepo) FindWorkspaceByID(id uint) (*model.Workspace, error) { return nil, nil }
+func (f *fakeBoardRepo) DeleteWorkspaceMember(workspaceID, userID uint) error { return nil }
+func (f *fakeBoardRepo) FindWorkspaceByID(id uint) (*model.Workspace, error)  { return nil, nil }
 func (f *fakeBoardRepo) FindWorkspacesByUser(userID, tenantID uint) ([]model.Workspace, error) {
 	return nil, nil
 }
-func (f *fakeBoardRepo) CreateBoard(board *model.Board) error { return nil }
-func (f *fakeBoardRepo) UpdateBoard(board *model.Board) error { return nil }
+func (f *fakeBoardRepo) FindWorkspacesByTeam(teamID uint) ([]model.Workspace, error) { return nil, nil }
+func (f *fakeBoardRepo) CreateBoard(board *model.Board) error                        { return nil }
+func (f *fakeBoardRepo) UpdateBoard(board *model.Board) error                        { return nil }
 func (f *fakeBoardRepo) FindBoardsByWorkspace(workspaceID uint) ([]model.Board, error) {
 	return nil, nil
 }
 func (f *fakeBoardRepo) CreateBoardMember(member *model.BoardMember) error { return nil }
+func (f *fakeBoardRepo) DeleteBoardMember(boardID, userID uint) error      { return nil }
 func (f *fakeBoardRepo) ReplaceBoardMembers(boardID uint, userIDs []uint) error {
 	return nil
 }
@@ -115,7 +139,7 @@ func (f *fakeBoardRepo) FindCardByID(id uint) (*model.BoardCard, error) {
 	return f.card, nil
 }
 
-func (f *fakeBoardRepo) CreateCardComment(comment *model.BoardCardComment) error { return nil }
+func (f *fakeBoardRepo) CreateCardComment(comment *model.BoardCardComment) error   { return nil }
 func (f *fakeBoardRepo) CreateChecklist(checklist *model.BoardCardChecklist) error { return nil }
 func (f *fakeBoardRepo) FindChecklistByID(id uint) (*model.BoardCardChecklist, error) {
 	return nil, nil
@@ -125,11 +149,11 @@ func (f *fakeBoardRepo) FindChecklistItemByID(id uint) (*model.BoardCardChecklis
 	return nil, nil
 }
 func (f *fakeBoardRepo) UpdateChecklistItem(item *model.BoardCardChecklistItem) error { return nil }
-func (f *fakeBoardRepo) CreateCardLabel(label *model.BoardCardLabel) error { return nil }
-func (f *fakeBoardRepo) DeleteLabelsByCard(cardID uint) error { return nil }
-func (f *fakeBoardRepo) CreateCardMember(member *model.BoardCardMember) error { return nil }
-func (f *fakeBoardRepo) DeleteCardMembersByCard(cardID uint) error { return nil }
-func (f *fakeBoardRepo) CreateActivity(activity *model.BoardActivity) error { return nil }
+func (f *fakeBoardRepo) CreateCardLabel(label *model.BoardCardLabel) error            { return nil }
+func (f *fakeBoardRepo) DeleteLabelsByCard(cardID uint) error                         { return nil }
+func (f *fakeBoardRepo) CreateCardMember(member *model.BoardCardMember) error         { return nil }
+func (f *fakeBoardRepo) DeleteCardMembersByCard(cardID uint) error                    { return nil }
+func (f *fakeBoardRepo) CreateActivity(activity *model.BoardActivity) error           { return nil }
 func (f *fakeBoardRepo) FindActivitiesByBoard(boardID uint) ([]model.BoardActivity, error) {
 	return f.activities, nil
 }

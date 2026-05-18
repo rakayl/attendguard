@@ -75,6 +75,25 @@ func (h *BoardHandler) CreateBoard(c *gin.Context) {
 	h.respond(c, http.StatusCreated, true, "Board created successfully", item, "")
 }
 
+func (h *BoardHandler) ListBoardsByWorkspace(c *gin.Context) {
+	workspaceID, err := parseUintParam(c, "id")
+	if err != nil {
+		h.respond(c, http.StatusBadRequest, false, "Invalid workspace ID", nil, "invalid workspace ID")
+		return
+	}
+	actor, err := h.currentUser(c)
+	if err != nil {
+		h.respond(c, http.StatusUnauthorized, false, "User not found", nil, "user not found")
+		return
+	}
+	items, err := h.svc.ListBoardsByWorkspace(workspaceID, actor)
+	if err != nil {
+		h.respond(c, http.StatusBadRequest, false, "Failed to fetch workspace boards", nil, err.Error())
+		return
+	}
+	h.respond(c, http.StatusOK, true, "Workspace boards fetched successfully", gin.H{"boards": items}, "")
+}
+
 func (h *BoardHandler) GetBoard(c *gin.Context) {
 	boardID, err := parseUintParam(c, "id")
 	if err != nil {

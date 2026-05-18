@@ -248,9 +248,40 @@ type FaceProfile struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
+type Team struct {
+	ID          uint         `gorm:"primaryKey" json:"id"`
+	TenantID    uint         `gorm:"not null;default:1;index" json:"tenant_id"`
+	Name        string       `gorm:"size:120;not null" json:"name"`
+	Description string       `gorm:"type:text" json:"description"`
+	Avatar      string       `json:"avatar"`
+	CreatedBy   uint         `gorm:"not null;index" json:"created_by"`
+	Creator     User         `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Members     []TeamMember `gorm:"foreignKey:TeamID" json:"members,omitempty"`
+	Workspaces  []Workspace  `gorm:"foreignKey:TeamID" json:"workspaces,omitempty"`
+	DeletedAt   *time.Time   `json:"deleted_at,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+type TeamMember struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	TeamID    uint       `gorm:"not null;index" json:"team_id"`
+	Team      Team       `gorm:"foreignKey:TeamID" json:"team,omitempty"`
+	UserID    uint       `gorm:"not null;index" json:"user_id"`
+	User      User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Role      string     `gorm:"size:20;not null;default:'member'" json:"role"`
+	InvitedBy *uint      `gorm:"index" json:"invited_by,omitempty"`
+	Inviter   *User      `gorm:"foreignKey:InvitedBy" json:"inviter,omitempty"`
+	JoinedAt  *time.Time `json:"joined_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 type Workspace struct {
 	ID          uint              `gorm:"primaryKey" json:"id"`
 	TenantID    uint              `gorm:"not null;default:1;index" json:"tenant_id"`
+	TeamID      *uint             `gorm:"index" json:"team_id,omitempty"`
+	Team        *Team             `gorm:"foreignKey:TeamID" json:"team,omitempty"`
 	Name        string            `gorm:"size:120;not null" json:"name"`
 	Slug        string            `gorm:"size:140;not null;uniqueIndex" json:"slug"`
 	Description string            `gorm:"type:text" json:"description"`

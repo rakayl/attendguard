@@ -37,7 +37,7 @@ const PermissionModal = ({ perm, onClose, onSave }) => {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="card w-full max-w-md p-6 animate-slide-up">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display font-bold text-white">{perm ? 'Edit Permission' : 'New Permission'}</h2>
+          <h2 className="font-display font-bold text-slate-100">{perm ? 'Edit Permission' : 'New Permission'}</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xl">×</button>
         </div>
 
@@ -145,8 +145,8 @@ const PermissionsPage = () => {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-white">Permissions</h1>
-          <p className="text-slate-500 text-sm mt-1">{permissions.length} permissions across {permModules.length} modules</p>
+          <h1 className="font-display text-2xl font-bold text-slate-100">Permissions</h1>
+          <p className="mt-1 text-sm text-slate-400">{permissions.length} permissions across {permModules.length} modules</p>
         </div>
         <button onClick={() => setModal('create')} className="btn-primary text-sm">+ New Permission</button>
       </div>

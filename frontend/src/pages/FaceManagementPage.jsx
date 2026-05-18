@@ -54,8 +54,8 @@ const FaceManagementPage = () => {
   return (
     <div className="p-6 lg:p-8 space-y-6 animate-slide-up">
       <div>
-        <h1 className="font-display text-2xl font-bold text-white">Face Recognition</h1>
-        <p className="text-slate-500 text-sm mt-1">Manage employee face profiles for anti proxy attendance.</p>
+        <h1 className="font-display text-2xl font-bold text-slate-100">Face Recognition</h1>
+        <p className="mt-1 text-sm text-slate-400">Manage employee face profiles for anti proxy attendance.</p>
       </div>
 
       {error && <div className="card p-4 border-red-500/20 bg-red-500/10 text-sm text-red-400">{error}</div>}
@@ -102,8 +102,8 @@ const FaceManagementPage = () => {
       <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
           <div>
-            <div className="font-display font-semibold text-white">Registered Face Profiles</div>
-            <div className="text-xs text-slate-500">{profiles.length} profile records</div>
+            <div className="font-display font-semibold text-slate-100">Registered Face Profiles</div>
+            <div className="text-xs text-slate-400">{profiles.length} profile records</div>
           </div>
           <button onClick={load} className="btn-secondary text-sm">Refresh</button>
         </div>

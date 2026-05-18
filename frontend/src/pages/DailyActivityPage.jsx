@@ -57,12 +57,12 @@ const ModalShell = ({ title, subtitle, onClose, children }) => (
   </div>
 )
 
-const ActivityModal = ({ users, item, onClose, onSave, saving }) => {
+const ActivityModal = ({ users, item, currentUser, showAssignedUserField, onClose, onSave, saving }) => {
   const [form, setForm] = useState(item ? {
     title: item.title,
     description: item.description || '',
     template_color: item.template_color || 'cyan',
-    assigned_to: String(item.assigned_to),
+    assigned_to: String(item.assigned_to || currentUser?.id || ''),
     activity_date: item.activity_date,
   } : activityDefaults)
   const [error, setError] = useState('')
@@ -71,7 +71,7 @@ const ActivityModal = ({ users, item, onClose, onSave, saving }) => {
     e.preventDefault()
     setError('')
     try {
-      await onSave({ ...form, assigned_to: Number(form.assigned_to) })
+      await onSave({ ...form, assigned_to: showAssignedUserField ? Number(form.assigned_to) : Number(currentUser?.id || form.assigned_to) })
       onClose()
     } catch (err) {
       setError(err.message || 'Failed to save daily activity')
@@ -84,14 +84,21 @@ const ActivityModal = ({ users, item, onClose, onSave, saving }) => {
         {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
         <input className="input-field" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <textarea className="input-field min-h-28 resize-y" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className={`grid gap-4 ${showAssignedUserField ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           <select className="input-field" value={form.template_color} onChange={(e) => setForm({ ...form, template_color: e.target.value })}>
             {TEMPLATE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <select className="input-field" value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })} required>
-            <option value="">Select assigned user...</option>
-            {users.map((user) => <option key={user.id} value={user.id}>{user.name} - {user.email}</option>)}
-          </select>
+          {showAssignedUserField ? (
+            <select className="input-field" value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })} required>
+              <option value="">Select assigned user...</option>
+              {users.map((user) => <option key={user.id} value={user.id}>{user.name} - {user.email}</option>)}
+            </select>
+          ) : (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
+              <div className="text-[11px] font-mono uppercase text-slate-500">Assigned User</div>
+              <div className="mt-1 font-medium text-slate-100">{currentUser?.name || 'Current user'}</div>
+            </div>
+          )}
           <input type="date" className="input-field" value={form.activity_date} onChange={(e) => setForm({ ...form, activity_date: e.target.value })} required />
         </div>
         <div className="flex gap-3 pt-2">
@@ -176,11 +183,15 @@ const DailyActivityPage = () => {
   const canDeleteActivity = can('activity:delete')
   const canUpdateTaskStatus = can('activity:task_update')
   const canComment = can('activity:comment')
+  const isEmployee = user?.role?.name === 'employee'
+  const showAssignedUserField = !isEmployee && users.length > 0
 
   useEffect(() => {
-    fetchUsers()
+    if (!isEmployee) {
+      fetchUsers().catch(() => {})
+    }
     fetchActivities({ date_preset: 'today' })
-  }, [])
+  }, [isEmployee])
 
   const summary = useMemo(() => ({
     total: activities.length,
@@ -264,7 +275,7 @@ const DailyActivityPage = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8 animate-slide-up">
-      {activityModal && <ActivityModal users={users} item={activityModal === 'create' ? null : activityModal} onClose={() => setActivityModal(null)} onSave={submitActivity} saving={saving} />}
+      {activityModal && <ActivityModal users={users} currentUser={user} showAssignedUserField={showAssignedUserField} item={activityModal === 'create' ? null : activityModal} onClose={() => setActivityModal(null)} onSave={submitActivity} saving={saving} />}
       {taskModal && <TaskModal item={taskModal === 'create' ? null : taskModal} onClose={() => setTaskModal(null)} onSave={submitTask} saving={saving} />}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

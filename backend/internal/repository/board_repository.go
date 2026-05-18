@@ -2,21 +2,36 @@ package repository
 
 import (
 	"attendance-system/internal/model"
+	"errors"
 
 	"gorm.io/gorm"
 )
 
 type BoardRepository interface {
 	WithTransaction(fn func(repo BoardRepository) error) error
+	CreateTeam(team *model.Team) error
+	UpdateTeam(team *model.Team) error
+	FindTeamByID(id uint) (*model.Team, error)
+	FindTeamsByUser(userID, tenantID uint) ([]model.Team, error)
+	CreateTeamMember(member *model.TeamMember) error
+	UpdateTeamMember(member *model.TeamMember) error
+	FindTeamMemberByID(id uint) (*model.TeamMember, error)
+	FindTeamMember(teamID, userID uint) (*model.TeamMember, error)
+	FindTeamMembers(teamID uint) ([]model.TeamMember, error)
+	FindJoinedTeamMembers(teamID uint) ([]model.TeamMember, error)
+	DeleteTeamMember(id uint) error
 	CreateWorkspace(workspace *model.Workspace) error
 	CreateWorkspaceMember(member *model.WorkspaceMember) error
+	DeleteWorkspaceMember(workspaceID, userID uint) error
 	FindWorkspaceByID(id uint) (*model.Workspace, error)
 	FindWorkspacesByUser(userID, tenantID uint) ([]model.Workspace, error)
+	FindWorkspacesByTeam(teamID uint) ([]model.Workspace, error)
 	CreateBoard(board *model.Board) error
 	UpdateBoard(board *model.Board) error
 	FindBoardsByWorkspace(workspaceID uint) ([]model.Board, error)
 	FindBoardByID(id uint) (*model.Board, error)
 	CreateBoardMember(member *model.BoardMember) error
+	DeleteBoardMember(boardID, userID uint) error
 	ReplaceBoardMembers(boardID uint, userIDs []uint) error
 	CreateList(list *model.BoardList) error
 	UpdateList(list *model.BoardList) error
@@ -52,6 +67,82 @@ func (r *boardRepository) WithTransaction(fn func(repo BoardRepository) error) e
 	})
 }
 
+func (r *boardRepository) CreateTeam(team *model.Team) error {
+	return r.db.Create(team).Error
+}
+
+func (r *boardRepository) UpdateTeam(team *model.Team) error {
+	return r.db.Save(team).Error
+}
+
+func (r *boardRepository) FindTeamByID(id uint) (*model.Team, error) {
+	var team model.Team
+	err := r.db.
+		Preload("Creator").
+		Preload("Members.User").
+		Preload("Members.Inviter").
+		Preload("Workspaces", func(db *gorm.DB) *gorm.DB { return db.Where("is_archived = false").Order("updated_at desc") }).
+		Preload("Workspaces.Owner").
+		Preload("Workspaces.Team").
+		Preload("Workspaces.Boards", func(db *gorm.DB) *gorm.DB { return db.Where("is_archived = false").Order("updated_at desc") }).
+		Preload("Workspaces.Boards.Creator").
+		Where("deleted_at IS NULL").
+		First(&team, id).Error
+	return &team, err
+}
+
+func (r *boardRepository) FindTeamsByUser(userID, tenantID uint) ([]model.Team, error) {
+	var teams []model.Team
+	err := r.db.
+		Joins("JOIN team_members ON team_members.team_id = teams.id").
+		Where("team_members.user_id = ? AND teams.tenant_id = ? AND teams.deleted_at IS NULL", userID, tenantID).
+		Preload("Creator").
+		Preload("Members.User").
+		Preload("Workspaces", func(db *gorm.DB) *gorm.DB { return db.Where("is_archived = false") }).
+		Order("teams.updated_at desc").
+		Find(&teams).Error
+	return teams, err
+}
+
+func (r *boardRepository) CreateTeamMember(member *model.TeamMember) error {
+	return r.db.Create(member).Error
+}
+
+func (r *boardRepository) UpdateTeamMember(member *model.TeamMember) error {
+	return r.db.Save(member).Error
+}
+
+func (r *boardRepository) FindTeamMemberByID(id uint) (*model.TeamMember, error) {
+	var member model.TeamMember
+	err := r.db.Preload("User").Preload("Inviter").First(&member, id).Error
+	return &member, err
+}
+
+func (r *boardRepository) FindTeamMember(teamID, userID uint) (*model.TeamMember, error) {
+	var member model.TeamMember
+	err := r.db.Preload("User").Preload("Inviter").Where("team_id = ? AND user_id = ?", teamID, userID).First(&member).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &member, err
+}
+
+func (r *boardRepository) FindTeamMembers(teamID uint) ([]model.TeamMember, error) {
+	var members []model.TeamMember
+	err := r.db.Preload("User").Preload("Inviter").Where("team_id = ?", teamID).Order("created_at asc").Find(&members).Error
+	return members, err
+}
+
+func (r *boardRepository) FindJoinedTeamMembers(teamID uint) ([]model.TeamMember, error) {
+	var members []model.TeamMember
+	err := r.db.Preload("User").Preload("Inviter").Where("team_id = ? AND joined_at IS NOT NULL", teamID).Order("created_at asc").Find(&members).Error
+	return members, err
+}
+
+func (r *boardRepository) DeleteTeamMember(id uint) error {
+	return r.db.Delete(&model.TeamMember{}, id).Error
+}
+
 func (r *boardRepository) CreateWorkspace(workspace *model.Workspace) error {
 	return r.db.Create(workspace).Error
 }
@@ -60,9 +151,17 @@ func (r *boardRepository) CreateWorkspaceMember(member *model.WorkspaceMember) e
 	return r.db.Create(member).Error
 }
 
+func (r *boardRepository) DeleteWorkspaceMember(workspaceID, userID uint) error {
+	return r.db.Where("workspace_id = ? AND user_id = ?", workspaceID, userID).Delete(&model.WorkspaceMember{}).Error
+}
+
 func (r *boardRepository) FindWorkspaceByID(id uint) (*model.Workspace, error) {
 	var workspace model.Workspace
-	err := r.db.Preload("Owner").Preload("Members.User").Where("is_archived = false").First(&workspace, id).Error
+	err := r.db.Preload("Owner").
+		Preload("Team").
+		Preload("Members.User").
+		Where("is_archived = false").
+		First(&workspace, id).Error
 	return &workspace, err
 }
 
@@ -72,7 +171,19 @@ func (r *boardRepository) FindWorkspacesByUser(userID, tenantID uint) ([]model.W
 		Joins("JOIN workspace_members ON workspace_members.workspace_id = workspaces.id").
 		Where("workspace_members.user_id = ? AND workspaces.tenant_id = ? AND workspaces.is_archived = false", userID, tenantID).
 		Preload("Owner").
+		Preload("Team").
 		Order("workspaces.updated_at desc").
+		Find(&workspaces).Error
+	return workspaces, err
+}
+
+func (r *boardRepository) FindWorkspacesByTeam(teamID uint) ([]model.Workspace, error) {
+	var workspaces []model.Workspace
+	err := r.db.Where("team_id = ? AND is_archived = false", teamID).
+		Preload("Owner").
+		Preload("Team").
+		Preload("Boards", func(db *gorm.DB) *gorm.DB { return db.Where("is_archived = false").Order("updated_at desc") }).
+		Order("updated_at desc").
 		Find(&workspaces).Error
 	return workspaces, err
 }
@@ -98,6 +209,9 @@ func (r *boardRepository) FindBoardByID(id uint) (*model.Board, error) {
 	var board model.Board
 	err := r.db.
 		Preload("Workspace").
+		Preload("Workspace.Team").
+		Preload("Workspace.Owner").
+		Preload("Workspace.Members.User").
 		Preload("Creator").
 		Preload("Members.User").
 		Preload("Lists", func(db *gorm.DB) *gorm.DB { return db.Where("is_archived = false").Order("position asc") }).
@@ -115,6 +229,10 @@ func (r *boardRepository) FindBoardByID(id uint) (*model.Board, error) {
 
 func (r *boardRepository) CreateBoardMember(member *model.BoardMember) error {
 	return r.db.Create(member).Error
+}
+
+func (r *boardRepository) DeleteBoardMember(boardID, userID uint) error {
+	return r.db.Where("board_id = ? AND user_id = ?", boardID, userID).Delete(&model.BoardMember{}).Error
 }
 
 func (r *boardRepository) ReplaceBoardMembers(boardID uint, userIDs []uint) error {
@@ -222,6 +340,10 @@ func (r *boardRepository) FindCardByID(id uint) (*model.BoardCard, error) {
 	var card model.BoardCard
 	err := r.db.
 		Preload("Board").
+		Preload("Board.Workspace").
+		Preload("Board.Workspace.Team").
+		Preload("Board.Workspace.Owner").
+		Preload("Board.Workspace.Members.User").
 		Preload("List").
 		Preload("Creator").
 		Preload("Members.User").

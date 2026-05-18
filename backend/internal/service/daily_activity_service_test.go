@@ -145,3 +145,17 @@ func TestResolveCalendarMonth(t *testing.T) {
 		t.Fatalf("unexpected month range start=%s end=%s month=%s", start, end, month)
 	}
 }
+
+func TestResolveAssignedToUsesSelfForEmployee(t *testing.T) {
+	employee := &model.User{ID: 17, Role: &model.Role{Name: "employee"}}
+	if got := resolveAssignedTo(employee, 99); got != 17 {
+		t.Fatalf("expected employee assigned_to to resolve to self, got %d", got)
+	}
+}
+
+func TestResolveAssignedToPreservesRequestedForManager(t *testing.T) {
+	manager := &model.User{ID: 8, Role: &model.Role{Name: "manager"}}
+	if got := resolveAssignedTo(manager, 99); got != 99 {
+		t.Fatalf("expected manager assigned_to to stay requested value, got %d", got)
+	}
+}
